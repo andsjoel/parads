@@ -38,8 +38,11 @@ export async function createUserBaseData({ uid, preRegister, username, authEmail
     role: "player",
 
     profile: {
+      displayName: preRegister.fullName,
       statusMessage: "",
-      selectedBackgroundId: "bg_default",
+      selectedBackgroundId: "bg-default-1",
+      selectedProfilePicId: "pic-default-1",
+      selectedStatusIcon: "✦",
     },
 
     progression: {
@@ -71,7 +74,9 @@ export async function createUserBaseData({ uid, preRegister, username, authEmail
   });
 
   batch.set(inventoryRef, {
-    backgrounds: ["bg_default"],
+    backgrounds: ["bg-default-1", "bg-default-2", "bg-default-3"],
+    profilePics: ["pic-default-1", "pic-default-2", "pic-default-3"],
+    accessories: [],
     trophies: [],
     medals: [],
     titles: [],

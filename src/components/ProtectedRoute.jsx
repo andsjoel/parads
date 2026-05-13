@@ -20,11 +20,20 @@ export default function ProtectedRoute({ children }) {
 
   if (isAuthenticated === null) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#020617] text-white">
-        <div className="flex items-center gap-3">
-          <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/20 border-t-app-primary" />
-          Carregando...
-        </div>
+      <main
+        className="
+          flex min-h-screen items-center justify-center
+          bg-[linear-gradient(220deg,#1d0312_0%,#2b1102_60%,#000000_100%)]
+        "
+      >
+        <span
+          className="
+            h-6 w-6 animate-spin rounded-full
+            border-2 border-white/10
+            border-t-app-primary
+            shadow-[0_0_18px_rgba(255,183,3,0.35)]
+          "
+        />
       </main>
     );
   }

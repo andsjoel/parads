@@ -62,6 +62,40 @@ export default function BottomNav() {
 
   return (
     <div className="pointer-events-none fixed bottom-4 left-0 right-0 z-50 flex justify-center px-5">
+
+      <div
+        className="
+        
+          pointer-events-auto
+          absolute
+          inset-x-0
+          bottom-[-40px]
+          h-30
+          overflow-hidden
+        "
+      >
+        {/* Blur real */}
+        <div
+          className="
+            absolute inset-0
+            backdrop-blur-[22px]
+            [mask-image:linear-gradient(to_top,black_35%,transparent_100%)]
+            [-webkit-mask-image:linear-gradient(to_top,black_35%,transparent_100%)]
+          "
+        />
+
+        {/* Gradiente de cor */}
+        <div
+          className="
+            absolute inset-0
+
+            bg-gradient-to-t
+            from-[#101716]/95
+            via-[#101716]/45
+            to-transparent
+          "
+        />
+      </div>
       <nav
   className="
     pointer-events-auto
@@ -136,10 +170,11 @@ export default function BottomNav() {
             onClick={(event) => {
               if (event.currentTarget.getAttribute("aria-current") === "page") {
                 event.preventDefault();
+                setIsExpanded(true);
                 return;
               }
 
-              setIsExpanded(false);
+              setIsExpanded(true);
               rotateBackground();
             }}
             className={({ isActive }) =>
