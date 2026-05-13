@@ -188,158 +188,167 @@ export default function ProfileHeader({ user, inventory, onUpdated }) {
           ${isEditing ? "scale-[1.01]" : ""}
         `}
       >
-        <div className="relative h-40 overflow-hidden">
-          <img src={backgroundUrl} alt="" className="h-full w-full object-cover" />
+        {!isEditing ? (
+            <>
+                <div className="relative h-40 overflow-hidden">
+                <img src={backgroundUrl} alt="" className="h-full w-full object-cover" />
 
-          <div className="absolute inset-0 bg-gradient-to-b from-black/5 via-black/10 to-[#17231f]" />
+                <div className="absolute inset-0 bg-gradient-to-b from-black/5 via-black/10 to-[#17231f]" />
 
-          <div className="absolute left-4 top-4 rounded-full border border-white/10 bg-black/25 px-3 py-1 text-xs font-black text-white backdrop-blur-xl">
-            Nv. {user?.progression?.level || 1}
-          </div>
+                <div className="absolute left-4 top-4 rounded-full border border-white/10 bg-black/25 px-3 py-1 text-xs font-black text-white backdrop-blur-xl">
+                    Nv. {user?.progression?.level || 1}
+                </div>
 
-          <button
-            type="button"
-            onClick={isEditing ? cancelEditing : startEditing}
-            className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/25 text-white backdrop-blur-xl transition active:scale-95"
-          >
-            {isEditing ? <X size={17} /> : <Edit3 size={16} />}
-          </button>
-        </div>
+                <button
+                    type="button"
+                    onClick={startEditing}
+                    className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/25 text-white backdrop-blur-xl transition active:scale-95"
+                >
+                    <Edit3 size={16} />
+                </button>
+                </div>
 
-        <div className="relative px-4 pb-5">
-          <div className="-mt-9 flex items-end gap-3">
-            <div className="relative h-[82px] w-[82px] shrink-0 rounded-full border-4 border-[#17231f] bg-[#101716] p-1 shadow-[0_0_28px_rgba(255,183,3,0.22)]">
-              <img
-                src={profilePicUrl}
-                alt={displayName}
-                className="h-full w-full rounded-full object-cover"
-              />
+                <div className="relative px-4 pb-5">
+                <div className="-mt-9 flex items-end gap-3">
+                    <div className="relative h-[82px] w-[82px] shrink-0 rounded-full border-4 border-[#17231f] bg-[#101716] p-1 shadow-[0_0_28px_rgba(255,183,3,0.22)]">
+                    <img
+                        src={profilePicUrl}
+                        alt={displayName}
+                        className="h-full w-full rounded-full object-cover"
+                    />
 
-              <button
-                type="button"
-                disabled={!isEditing}
-                onClick={() => setPickerType("statusIcon")}
-                className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-app-primary text-xs font-black text-[#1b1300] shadow-[0_0_16px_rgba(255,183,3,0.38)] disabled:pointer-events-none"
-              >
-                {selectedStatusIcon}
-              </button>
-            </div>
+                    <div className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-app-primary text-xs font-black text-[#1b1300] shadow-[0_0_16px_rgba(255,183,3,0.38)]">
+                        {selectedStatusIcon}
+                    </div>
+                    </div>
 
-            <div className="min-w-0 pb-2">
-              <h1 className="truncate text-xl font-black tracking-tight text-[#fffaf0]">
-                {displayName}
-              </h1>
+                    <div className="min-w-0 pb-2">
+                    <h1 className="truncate text-xl font-black tracking-tight text-[#fffaf0]">
+                        {displayName}
+                    </h1>
 
-              <p className="mt-0.5 truncate text-sm font-semibold text-app-muted">
-                @{user?.username || "player"}
-              </p>
-            </div>
-          </div>
+                    <p className="mt-0.5 truncate text-sm font-semibold text-app-muted">
+                        @{user?.username || "player"}
+                    </p>
+                    </div>
+                </div>
 
-          <p className="mt-4 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm leading-relaxed text-[#fffaf0]">
-            {statusMessage}
-          </p>
+                <p className="mt-4 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm leading-relaxed text-[#fffaf0]">
+                    {statusMessage}
+                </p>
+                </div>
+            </>
+            ) : (
+            <div className="p-4">
+                <div className="mb-4 flex items-center justify-between">
+                <div>
+                    <h2 className="text-lg font-black text-[#fffaf0]">Editar perfil</h2>
+                    <p className="mt-1 text-xs text-app-muted">
+                    Personalize sua identidade de jogador
+                    </p>
+                </div>
 
-          <div
-            className={`
-              grid transition-all duration-500
-              ${isEditing ? "mt-4 grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}
-            `}
-          >
-            <div className="overflow-hidden">
-              <div className="flex flex-col gap-3">
+                <button
+                    type="button"
+                    onClick={cancelEditing}
+                    className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white"
+                >
+                    <X size={17} />
+                </button>
+                </div>
+
+                <div className="flex flex-col gap-3">
                 <EditRow
-                  icon={Sparkles}
-                  label="Nível"
-                  value={`Nv. ${user?.progression?.level || 1}`}
-                  disabled
+                    icon={Sparkles}
+                    label="Nível"
+                    value={`Nv. ${user?.progression?.level || 1}`}
+                    disabled
                 />
 
                 <EditRow
-                  icon={Image}
-                  label="Background"
-                  value={draftProfile.selectedBackgroundId}
-                  onClick={() => setPickerType("background")}
+                    icon={Image}
+                    label="Background"
+                    value={draftProfile.selectedBackgroundId}
+                    onClick={() => setPickerType("background")}
                 />
 
                 <EditRow
-                  icon={UserRound}
-                  label="Foto"
-                  value={draftProfile.selectedProfilePicId}
-                  onClick={() => setPickerType("profilePic")}
+                    icon={UserRound}
+                    label="Foto"
+                    value={draftProfile.selectedProfilePicId}
+                    onClick={() => setPickerType("profilePic")}
                 />
 
                 <EditRow
-                  icon={Sparkles}
-                  label="Ícone"
-                  value={draftProfile.selectedStatusIcon}
-                  onClick={() => setPickerType("statusIcon")}
+                    icon={Sparkles}
+                    label="Ícone"
+                    value={draftProfile.selectedStatusIcon}
+                    onClick={() => setPickerType("statusIcon")}
                 />
 
                 <div>
-                  <label className="mb-1 block text-xs font-bold text-app-muted">
+                    <label className="mb-1 block text-xs font-bold text-app-muted">
                     Nome de exibição
-                  </label>
-                  <input
+                    </label>
+                    <input
                     value={draftProfile.displayName}
                     maxLength={15}
                     onChange={(event) =>
-                      setDraftProfile((current) => ({
+                        setDraftProfile((current) => ({
                         ...current,
                         displayName: onlyLettersAndNumbers(event.target.value).slice(0, 15),
-                      }))
+                        }))
                     }
                     className="h-11 w-full rounded-2xl border border-white/10 bg-white/[0.06] px-4 text-sm font-bold text-white outline-none focus:border-app-primary/40 focus:ring-4 focus:ring-app-primary/10"
-                  />
+                    />
                 </div>
 
                 <EditRow
-                  icon={UserRound}
-                  label="Usuário"
-                  value={`@${user?.username || "player"}`}
-                  disabled
+                    icon={UserRound}
+                    label="Usuário"
+                    value={`@${user?.username || "player"}`}
+                    disabled
                 />
 
                 <div>
-                  <label className="mb-1 block text-xs font-bold text-app-muted">
+                    <label className="mb-1 block text-xs font-bold text-app-muted">
                     Status
-                  </label>
-                  <input
+                    </label>
+                    <input
                     value={draftProfile.statusMessage}
                     maxLength={25}
                     onChange={(event) =>
-                      setDraftProfile((current) => ({
+                        setDraftProfile((current) => ({
                         ...current,
                         statusMessage: event.target.value.slice(0, 25),
-                      }))
+                        }))
                     }
                     placeholder="Pronto para jogar"
                     className="h-11 w-full rounded-2xl border border-white/10 bg-white/[0.06] px-4 text-sm text-white outline-none placeholder:text-app-muted focus:border-app-primary/40 focus:ring-4 focus:ring-app-primary/10"
-                  />
+                    />
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 pt-1">
-                  <button
+                    <button
                     type="button"
                     onClick={cancelEditing}
                     className="h-11 rounded-full border border-white/10 bg-white/[0.06] text-sm font-black text-white active:scale-[0.98]"
-                  >
+                    >
                     Cancelar
-                  </button>
+                    </button>
 
-                  <button
+                    <button
                     type="button"
                     onClick={handleSave}
                     disabled={isSaving}
                     className="h-11 rounded-full bg-app-primary text-sm font-black text-[#1b1300] shadow-[0_10px_30px_rgba(255,183,3,0.28)] active:scale-[0.98] disabled:opacity-50"
-                  >
+                    >
                     {isSaving ? "Salvando..." : "Salvar"}
-                  </button>
+                    </button>
                 </div>
-              </div>
+                </div>
             </div>
-          </div>
-        </div>
+            )}
       </section>
 
       {pickerType && (
