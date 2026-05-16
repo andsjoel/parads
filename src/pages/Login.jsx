@@ -13,18 +13,23 @@ export default function Login() {
 
   const [isLoading, setIsLoading] = useState(false);
 
+  const [errorMessage, setErrorMessage] = useState("");
+
   const navigate = useNavigate();
 
   function handlePasswordChange(event) {
     const value = event.target.value.slice(0, 8);
 
     setPassword(value);
+    setErrorMessage("");
   }
 
   async function handleSubmit(event) {
     event.preventDefault();
 
     if (!isSubmitEnabled || isLoading) return;
+
+    setErrorMessage("");
 
     try {
       setIsLoading(true);
@@ -43,7 +48,27 @@ export default function Login() {
       navigate("/feed", { replace: true });
     } catch (error) {
       console.error(error);
-      alert("Usuário ou senha inválidos.");
+
+      switch (error.code) {
+        case "auth/user-not-found":
+          setErrorMessage("Usuário não encontrado.");
+          break;
+
+        case "auth/wrong-password":
+          setErrorMessage("Senha incorreta.");
+          break;
+
+        case "auth/invalid-credential":
+          setErrorMessage("Usuário ou senha inválidos.");
+          break;
+
+        case "auth/too-many-requests":
+          setErrorMessage("Muitas tentativas. Tente novamente mais tarde.");
+          break;
+
+        default:
+          setErrorMessage("Não foi possível entrar.");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -65,7 +90,10 @@ export default function Login() {
           <div className="mb-3">
             <input
               value={login}
-              onChange={(event) => setLogin(event.target.value)}
+              onChange={(event) => {
+                setLogin(event.target.value);
+                setErrorMessage("");
+              }}
               placeholder="Seu usuário"
               autoComplete="username"
               className="
@@ -106,7 +134,8 @@ export default function Login() {
                   flex
                   h-12
                   items-center
-                  justify-between
+                  justify-center
+                  gap-2.5
                   rounded-[1.4rem]
                   border
                   border-white/10
@@ -180,6 +209,22 @@ export default function Login() {
               "Entrar"
             )}
           </button>
+          {errorMessage && (
+            <p
+              className="
+                mt-2
+                text-center
+                text-sm
+                font-medium
+                text-red-400
+                animate-in
+                fade-in
+                duration-200
+              "
+            >
+              {errorMessage}
+            </p>
+          )}
         </form>
       </section>
 

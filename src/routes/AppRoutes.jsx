@@ -11,6 +11,8 @@ import AdminPreRegisters from "../pages/AdminPreRegisters";
 import AppLayout from "../layouts/AppLayout";
 import ProtectedRoute from "../components/ProtectedRoute";
 
+import AdminVolleyList from "../pages/AdminVolleyList";
+
 export default function AppRoutes() {
   return (
     <Routes>
@@ -33,6 +35,8 @@ export default function AppRoutes() {
 
         <Route path="admin" element={<Admin />} />
         <Route path="admin/pre-registers" element={<AdminPreRegisters />} />
+
+        <Route path="admin/volley-list" element={<AdminVolleyList />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/login" replace />} />

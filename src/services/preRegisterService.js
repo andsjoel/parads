@@ -27,17 +27,27 @@ export async function getPreRegisters() {
   }));
 }
 
-export async function createPreRegister({ fullName, phone, type }) {
+export async function createPreRegister({
+  fullName,
+  phone,
+  type = "member",
+  role = "member",
+}) {
   const phoneWithCountry = `55${phone}`;
 
   const payload = {
     fullName: fullName.trim(),
     phone: phoneWithCountry,
+
     type,
+    role,
+
     enabled: true,
     claimed: false,
     userId: null,
+
     createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
   };
 
   await setDoc(doc(db, COLLECTION_NAME, phoneWithCountry), payload);

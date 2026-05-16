@@ -1,0 +1,38 @@
+export const profilePicBordersCatalog = [
+  {
+    id: "border-pic-default-1",
+    name: "Neon Roxo Azul",
+    description: "Borda neon padrão com brilho roxo e azul.",
+    category: "profile",
+    theme: "default",
+    rarity: "common",
+    imageId: "border-pic-default-1",
+  },
+  {
+    id: "border-pic-default-2",
+    name: "Dourada",
+    description: "Borda dourada padrão com brilho suave.",
+    category: "profile",
+    theme: "default",
+    rarity: "common",
+    imageId: "border-pic-default-2",
+  },
+  {
+    id: "border-pic-headset-neon-1",
+    name: "Headset Neon",
+    description: "Borda gamer neon com headset.",
+    category: "profile",
+    theme: "neon",
+    rarity: "rare",
+    imageId: "border-pic-headset-neon-1",
+  },
+  {
+    id: "border-pic-bear-hat-1",
+    name: "Touca Ursinho",
+    description: "Uma touca fofa de ursinho para deixar o perfil mais divertido.",
+    category: "profile",
+    theme: "cute",
+    rarity: "special",
+    imageId: "border-pic-bear-hat-1",
+  },
+];

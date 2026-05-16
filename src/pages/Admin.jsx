@@ -17,11 +17,11 @@ const adminServices = [
     disabled: true,
   },
   {
-    title: "Funções",
-    description: "Organização dos times",
+    title: "Lista",
+    description: "Criar e organizar a lista",
     icon: ShieldCheck,
-    to: "#",
-    disabled: true,
+    to: "/admin/volley-list",
+    disabled: false,
   },
   {
     title: "Arena",

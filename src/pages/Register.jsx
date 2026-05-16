@@ -62,6 +62,9 @@ export default function Register() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
 
+  const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+
   const recaptchaRef = useRef(null);
 
   const phoneNumbers = onlyNumbers(phone);
@@ -125,6 +128,67 @@ export default function Register() {
     searchPreRegister();
   }, [isPhoneComplete, phoneNumbers]);
 
+  function clearMessages() {
+    setErrorMessage("");
+    setSuccessMessage("");
+  }
+
+  function getSmsErrorMessage(error) {
+    switch (error.code) {
+      case "auth/invalid-phone-number":
+        return "Número de telefone inválido.";
+
+      case "auth/too-many-requests":
+        return "Muitas tentativas. Tente novamente mais tarde.";
+
+      case "auth/quota-exceeded":
+        return "Limite de SMS excedido. Tente novamente mais tarde.";
+
+      case "auth/captcha-check-failed":
+      case "auth/invalid-app-credential":
+        return "Falha na verificação de segurança. Tente novamente.";
+
+      default:
+        return "Não foi possível enviar o SMS.";
+    }
+  }
+
+  function getCodeErrorMessage(error) {
+    switch (error.code) {
+      case "auth/invalid-verification-code":
+        return "Código incorreto. Confira o SMS e tente novamente.";
+
+      case "auth/code-expired":
+      case "auth/session-expired":
+        return "Código expirado. Solicite um novo SMS.";
+
+      case "auth/too-many-requests":
+        return "Muitas tentativas. Tente novamente mais tarde.";
+
+      default:
+        return "Não foi possível validar o código.";
+    }
+  }
+
+  function getCreateAccountErrorMessage(error) {
+    switch (error.code) {
+      case "auth/email-already-in-use":
+        return "Esse usuário já está em uso.";
+
+      case "auth/weak-password":
+        return "A senha precisa ter 8 caracteres.";
+
+      case "auth/network-request-failed":
+        return "Erro de conexão. Verifique sua internet.";
+
+      case "permission-denied":
+        return "Sem permissão para concluir o cadastro.";
+
+      default:
+        return "Não foi possível criar a conta.";
+    }
+  }
+
   function handlePhoneChange(event) {
     setPhone(maskPhone(event.target.value));
   }
@@ -184,6 +248,7 @@ export default function Register() {
 
   async function handleSendSms() {
     try {
+      clearMessages();
       setIsSendingSms(true);
 
       const verifier = await getRecaptchaVerifier();
@@ -194,12 +259,11 @@ export default function Register() {
       );
 
       setConfirmationResult(result);
+      setSuccessMessage("Código enviado por SMS.");
     } catch (error) {
       console.error(error);
-
       clearRecaptcha();
-
-      alert("Não foi possível enviar o SMS.");
+      setErrorMessage(getSmsErrorMessage(error));
     } finally {
       setIsSendingSms(false);
     }
@@ -209,6 +273,7 @@ export default function Register() {
     if (!confirmationResult || smsCode.length !== 6) return;
 
     try {
+      clearMessages();
       setIsCheckingCode(true);
 
       await confirmationResult.confirm(smsCode);
@@ -216,9 +281,10 @@ export default function Register() {
       await signOut(auth);
 
       setIsPhoneVerified(true);
+      setSuccessMessage("Telefone confirmado. Agora crie seu usuário.");
     } catch (error) {
       console.error(error);
-      alert("Código inválido.");
+      setErrorMessage(getCodeErrorMessage(error));
     } finally {
       setIsCheckingCode(false);
     }
@@ -228,13 +294,15 @@ export default function Register() {
     if (!canCreateAccount || !preRegister) return;
 
     try {
+      clearMessages();
+
       const cleanUsername = username.trim().toLowerCase();
       const authEmail = buildAuthEmail(cleanUsername);
 
       const available = await isUsernameAvailable(cleanUsername);
 
       if (!available) {
-        alert("Esse usuário já está em uso.");
+        setErrorMessage("Esse usuário já está em uso.");
         return;
       }
 
@@ -256,7 +324,7 @@ export default function Register() {
       navigate("/feed");
     } catch (error) {
       console.error(error);
-      alert("Não foi possível criar a conta.");
+      setErrorMessage(getCreateAccountErrorMessage(error));
     }
   }
 
@@ -378,9 +446,10 @@ export default function Register() {
             <div className="mt-5 flex flex-col gap-3 transition-all">
               <input
                 value={smsCode}
-                onChange={(event) =>
-                  setSmsCode(onlyNumbers(event.target.value).slice(0, 6))
-                }
+                onChange={(event) => {
+                  clearMessages();
+                  setSmsCode(onlyNumbers(event.target.value).slice(0, 6));
+                }}
                 placeholder="código SMS"
                 inputMode="numeric"
                 className="h-12 w-full rounded-[1.4rem] border border-white/10 bg-white/[0.06] px-4 text-center text-sm tracking-[0.35em] text-white shadow-[0_8px_40px_rgba(0,0,0,0.25)] outline-none backdrop-blur-2xl transition placeholder:tracking-normal placeholder:text-app-muted focus:border-app-primary/30 focus:bg-white/[0.08] focus:ring-4 focus:ring-app-primary/10"
@@ -454,6 +523,18 @@ export default function Register() {
                 </button>
               </div>
             </div>
+          )}
+
+          {errorMessage && (
+            <p className="mt-3 text-center text-sm font-medium text-red-400 animate-in fade-in duration-200">
+              {errorMessage}
+            </p>
+          )}
+
+          {successMessage && (
+            <p className="mt-3 text-center text-sm font-medium text-app-primary animate-in fade-in duration-200">
+              {successMessage}
+            </p>
           )}
         </div>
       </section>

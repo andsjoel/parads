@@ -4,19 +4,24 @@ import { onAuthStateChanged } from "firebase/auth";
 
 import { auth, db } from "../firebase/firebase";
 import ProfileHeader from "../components/profile/ProfileHeader";
+import ProfileStats from "../components/profile/ProfileStats";
+import ProfileAchievements from "../components/profile/ProfileAchievements";
 
 export default function Profile() {
   const [userData, setUserData] = useState(null);
   const [inventory, setInventory] = useState(null);
+  const [stats, setStats] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
   async function loadProfile(user) {
     const userRef = doc(db, "users", user.uid);
     const inventoryRef = doc(db, "user_inventory", user.uid);
+    const statsRef = doc(db, "user_stats", user.uid);
 
-    const [userSnap, inventorySnap] = await Promise.all([
+    const [userSnap, inventorySnap, statsSnap] = await Promise.all([
       getDoc(userRef),
       getDoc(inventoryRef),
+      getDoc(statsRef),
     ]);
 
     if (userSnap.exists()) {
@@ -29,6 +34,10 @@ export default function Profile() {
     if (inventorySnap.exists()) {
       setInventory(inventorySnap.data());
     }
+
+    if (statsSnap.exists()) {
+      setStats(statsSnap.data());
+    }
   }
 
   useEffect(() => {
@@ -36,6 +45,7 @@ export default function Profile() {
       if (!user) {
         setUserData(null);
         setInventory(null);
+        setStats(null);
         setIsLoading(false);
         return;
       }
@@ -64,12 +74,9 @@ export default function Profile() {
           onUpdated={setUserData}
         />
 
-        <div className="rounded-[1.6rem] border border-white/10 bg-[#17231f]/70 p-4 backdrop-blur-2xl">
-          <p className="text-sm font-black text-[#fffaf0]">Coleção</p>
-          <p className="mt-1 text-xs text-app-muted">
-            Fundos, fotos e efeitos desbloqueados aparecerão aqui.
-          </p>
-        </div>
+        <ProfileStats stats={stats} />
+
+        <ProfileAchievements inventory={inventory} />
       </section>
     </main>
   );

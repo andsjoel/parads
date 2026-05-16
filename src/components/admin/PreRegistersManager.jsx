@@ -17,6 +17,8 @@ import {
 
 import ConfirmDeleteModal from "../../components/ConfirmDeleteModal";
 
+import { deleteUserCascadeByPreRegister } from "../../services/userService";
+
 function onlyNumbers(value) {
   return value.replace(/\D/g, "");
 }
@@ -36,7 +38,7 @@ function maskPhone(value) {
   )}-${numbers.slice(7)}`;
 }
 
-const typeOptions = [
+const roleOptions = [
   { label: "Membro", value: "member" },
   { label: "Convidado", value: "guest" },
   { label: "Admin", value: "admin" },
@@ -53,7 +55,7 @@ export default function PreRegistersManager() {
 
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
-  const [type, setType] = useState("member");
+  const [role, setRole] = useState("member");
   const [isSaving, setIsSaving] = useState(false);
 
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -84,7 +86,7 @@ export default function PreRegistersManager() {
         item.fullName?.toLowerCase().includes(cleanSearch) ||
         item.phone?.includes(searchNumbers);
 
-      const matchesType = typeFilter === "all" || item.type === typeFilter;
+      const matchesType = typeFilter === "all" || item.role === typeFilter;
 
       const matchesStatus =
         statusFilter === "all" ||
@@ -108,12 +110,13 @@ export default function PreRegistersManager() {
       await createPreRegister({
         fullName,
         phone: phoneNumbers,
-        type,
+        type: "member",
+        role,
       });
 
       setFullName("");
       setPhone("");
-      setType("member");
+      setRole("member");
       setShowModal(false);
 
       await loadPreRegisters();
@@ -128,7 +131,7 @@ export default function PreRegistersManager() {
     try {
       setIsDeleting(true);
 
-      await deletePreRegister(deleteTarget.id);
+      await deleteUserCascadeByPreRegister(deleteTarget.id);
 
       setDeleteTarget(null);
 
@@ -247,11 +250,11 @@ export default function PreRegistersManager() {
 
                 <div className="mt-3 flex items-center gap-2">
                   <span className="rounded-full bg-white/[0.06] px-3 py-1 text-xs font-semibold text-slate-400">
-                    {item.type === "member"
-                      ? "Membro"
-                      : item.type === "guest"
+                    {item.role === "admin"
+                      ? "Admin"
+                      : item.role === "guest"
                         ? "Convidado"
-                        : "Admin"}
+                        : "Membro"}
                   </span>
 
                   <span className="rounded-full bg-white/[0.06] px-3 py-1 text-xs font-semibold text-slate-400">
@@ -310,11 +313,11 @@ export default function PreRegistersManager() {
               />
 
               <select
-                value={type}
-                onChange={(event) => setType(event.target.value)}
+                value={role}
+                onChange={(event) => setRole(event.target.value)}
                 className="h-10 rounded-full border border-white/10 bg-[#16231f] px-3 text-sm text-stone-300 outline-none focus:border-app-primary/40"
               >
-                {typeOptions.map((option) => (
+                {roleOptions.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
                   </option>
