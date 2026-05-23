@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { UserPlus, Users, ShieldCheck, Settings } from "lucide-react";
+import { useAuth } from "../contexts/AuthContext";
 
 const adminServices = [
   {
@@ -20,7 +21,7 @@ const adminServices = [
     title: "Lista",
     description: "Criar e organizar a lista",
     icon: ShieldCheck,
-    to: "/admin/volley-list",
+    to: "/matches",
     disabled: false,
   },
   {
@@ -33,6 +34,30 @@ const adminServices = [
 ];
 
 export default function Admin() {
+  const { isAdmin } = useAuth();
+
+  if (!isAdmin) {
+    return (
+      <main className="min-h-screen px-5 pb-28 pt-6 text-white">
+        <section className="mx-auto flex min-h-[60vh] w-full max-w-[420px] items-center justify-center">
+          <div className="w-full rounded-[2rem] border border-dashed border-white/10 bg-white/[0.04] p-6 text-center">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-3xl bg-app-primary/15 text-app-primary">
+              <ShieldCheck size={26} />
+            </div>
+
+            <p className="text-lg font-black text-[#fffaf0]">
+              Ops, somente para administradores.
+            </p>
+
+            <p className="mt-2 text-sm leading-relaxed text-[#9aa89f]">
+              Essa area e reservada para quem organiza a comunidade.
+            </p>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen px-5 pb-28 pt-6 text-white">
       <section className="mx-auto w-full max-w-[420px]">

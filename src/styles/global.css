@@ -84,4 +84,62 @@
   .input {
     @apply min-h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-4 text-white outline-none placeholder:text-slate-500 focus:border-app-primary focus:ring-4 focus:ring-app-primary/20;
   }
+
+  .profile-sticker-card {
+    animation: profile-sticker-enter 420ms cubic-bezier(0.2, 0.9, 0.22, 1.15)
+      both;
+    transform-origin: 50% 92%;
+  }
+
+  .profile-sticker-shine {
+    animation: profile-sticker-shine 2200ms ease-in-out 260ms both;
+    background: linear-gradient(
+      115deg,
+      transparent 0%,
+      transparent 38%,
+      rgba(255, 255, 255, 0.08) 44%,
+      rgba(255, 247, 205, 0.42) 50%,
+      rgba(255, 255, 255, 0.1) 56%,
+      transparent 64%,
+      transparent 100%
+    );
+    mix-blend-mode: screen;
+  }
+}
+
+@keyframes profile-sticker-enter {
+  0% {
+    opacity: 0;
+    transform: translateY(34px) scale(0.88) rotateX(12deg) rotateZ(-1.5deg);
+  }
+
+  62% {
+    opacity: 1;
+    transform: translateY(-4px) scale(1.018) rotateX(0deg) rotateZ(0.7deg);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1) rotateX(0deg) rotateZ(0deg);
+  }
+}
+
+@keyframes profile-sticker-shine {
+  0% {
+    opacity: 0;
+    transform: translateX(-140%) skewX(-18deg);
+  }
+
+  18% {
+    opacity: 0.85;
+  }
+
+  52% {
+    opacity: 0.55;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateX(140%) skewX(-18deg);
+  }
 }

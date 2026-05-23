@@ -1,3 +1,4 @@
+/* eslint-disable react/prop-types */
 import { useMemo, useState } from "react";
 import { Check, Edit3, Image, Sparkles, UserRound, X } from "lucide-react";
 
@@ -7,55 +8,19 @@ import { unlockAchievement } from "../../services/achievementService";
 import { profileBackgroundsCatalog } from "../../data/profileBackgroundsCatalog";
 import { profilePicsCatalog } from "../../data/profilePicsCatalog";
 import { profilePicBordersCatalog } from "../../data/profilePicBordersCatalog";
+import {
+  getAssetById,
+  getCatalogAssetList,
+  profileAssetFiles,
+} from "../../utils/profileAssets";
 
-const backgroundImages = import.meta.glob(
-  "../../assets/profile-backgrounds/*.{png,jpg,jpeg,webp}",
-  {
-    eager: true,
-    import: "default",
-  },
-);
-
-const profilePicImages = import.meta.glob(
-  "../../assets/profile-pics/*.{png,jpg,jpeg,webp}",
-  {
-    eager: true,
-    import: "default",
-  },
-);
-
-const profilePicBorderImages = import.meta.glob(
-  "../../assets/profile-pic-borders/*.{png,jpg,jpeg,webp,svg}",
-  {
-    eager: true,
-    import: "default",
-  },
-);
+const {
+  backgroundImages,
+  profilePicImages,
+  profilePicBorderImages,
+} = profileAssetFiles;
 
 const statusIcons = ["✦", "⚡", "🔥", "🏐", "👑", "🌙", "💫", "🪽"];
-
-function getAssetById(files, id, fallbackId) {
-  const targetId = id || fallbackId;
-
-  const entry = Object.entries(files).find(([path]) =>
-    path.includes(`${targetId}.`),
-  );
-
-  if (entry) return entry[1];
-
-  const fallback = Object.entries(files).find(([path]) =>
-    path.includes(`${fallbackId}.`),
-  );
-
-  return fallback?.[1] || "";
-}
-
-function getCatalogAssetList(files, catalog) {
-  return catalog.map((item) => ({
-    ...item,
-    src: getAssetById(files, item.imageId, item.imageId),
-  }));
-}
 
 function getThemeFromItem(item) {
   return item.theme || "default";
@@ -69,7 +34,13 @@ function onlyLettersAndNumbers(value) {
   return value.replace(/[^a-zA-ZÀ-ÿ0-9\s]/g, "");
 }
 
-export default function ProfileHeader({ user, inventory, onUpdated }) {
+export default function ProfileHeader({
+  user,
+  inventory,
+  onUpdated,
+  readOnly = false,
+  onClose,
+}) {
   const profile = user?.profile || {};
 
   const [isEditing, setIsEditing] = useState(false);
@@ -264,13 +235,25 @@ export default function ProfileHeader({ user, inventory, onUpdated }) {
                 Nv. {user?.progression?.level || 1}
               </div>
 
-              <button
-                type="button"
-                onClick={startEditing}
-                className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/25 text-white backdrop-blur-xl transition active:scale-95"
-              >
-                <Edit3 size={16} />
-              </button>
+              {readOnly ? (
+                onClose && (
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/25 text-white backdrop-blur-xl transition active:scale-95"
+                  >
+                    <X size={16} />
+                  </button>
+                )
+              ) : (
+                <button
+                  type="button"
+                  onClick={startEditing}
+                  className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/25 text-white backdrop-blur-xl transition active:scale-95"
+                >
+                  <Edit3 size={16} />
+                </button>
+              )}
             </div>
 
             <div className="relative px-4 pb-5">
@@ -526,13 +509,20 @@ function AssetPickerModal({
         ? "Escolher borda"
         : "Escolher ícone";
 
-  const items = isBackground
-    ? backgrounds
-    : isProfilePic
-      ? profilePics
-      : isProfilePicBorder
-        ? profilePicBorders
-        : [];
+  const items = useMemo(() => {
+    if (isBackground) return backgrounds;
+    if (isProfilePic) return profilePics;
+    if (isProfilePicBorder) return profilePicBorders;
+
+    return [];
+  }, [
+    backgrounds,
+    isBackground,
+    isProfilePic,
+    isProfilePicBorder,
+    profilePicBorders,
+    profilePics,
+  ]);
 
   const themes = useMemo(() => {
     const uniqueThemes = new Set(items.map((item) => getThemeFromItem(item)));

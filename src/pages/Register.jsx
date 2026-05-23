@@ -2,14 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import {
   doc,
   getDoc,
-  serverTimestamp,
-  setDoc,
-  updateDoc,
 } from "firebase/firestore";
 import {
   RecaptchaVerifier,
   signInWithPhoneNumber,
   createUserWithEmailAndPassword,
+  deleteUser,
+  signInWithEmailAndPassword,
   signOut,
 } from "firebase/auth";
 
@@ -175,6 +174,10 @@ export default function Register() {
       case "auth/email-already-in-use":
         return "Esse usuário já está em uso.";
 
+      case "auth/invalid-credential":
+      case "auth/wrong-password":
+        return "Esse usuário já está em uso.";
+
       case "auth/weak-password":
         return "A senha precisa ter 8 caracteres.";
 
@@ -290,6 +293,47 @@ export default function Register() {
     }
   }
 
+  async function createOrRecoverAuthCredential(authEmail, password) {
+    try {
+      const credential = await createUserWithEmailAndPassword(
+        auth,
+        authEmail,
+        password,
+      );
+
+      return {
+        credential,
+        isNewAuthUser: true,
+      };
+    } catch (error) {
+      if (error.code !== "auth/email-already-in-use") {
+        throw error;
+      }
+
+      try {
+        const credential = await signInWithEmailAndPassword(
+          auth,
+          authEmail,
+          password,
+        );
+        const userSnap = await getDoc(doc(db, "users", credential.user.uid));
+
+        if (userSnap.exists()) {
+          await signOut(auth);
+          throw error;
+        }
+
+        return {
+          credential,
+          isNewAuthUser: false,
+        };
+      } catch (recoverError) {
+        console.error(recoverError);
+        throw error;
+      }
+    }
+  }
+
   async function handleCreateAccount() {
     if (!canCreateAccount || !preRegister) return;
 
@@ -308,18 +352,29 @@ export default function Register() {
 
       await signOut(auth);
 
-      const credential = await createUserWithEmailAndPassword(
-        auth,
+      const { credential, isNewAuthUser } = await createOrRecoverAuthCredential(
         authEmail,
         password,
       );
 
-      await createUserBaseData({
-        uid: credential.user.uid,
-        preRegister,
-        username: cleanUsername,
-        authEmail,
-      });
+      try {
+        await createUserBaseData({
+          uid: credential.user.uid,
+          preRegister,
+          username: cleanUsername,
+          authEmail,
+        });
+      } catch (error) {
+        if (isNewAuthUser) {
+          try {
+            await deleteUser(credential.user);
+          } catch (cleanupError) {
+            console.error(cleanupError);
+          }
+        }
+
+        throw error;
+      }
 
       navigate("/feed");
     } catch (error) {
