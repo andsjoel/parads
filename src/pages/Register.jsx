@@ -23,6 +23,8 @@ import {
 
 import { auth, db } from "../firebase/firebase";
 
+const SMS_COOLDOWN_SECONDS = 45;
+
 function onlyNumbers(value) {
   return value.replace(/\D/g, "");
 }
@@ -95,6 +97,7 @@ export default function Register() {
   const [confirmationResult, setConfirmationResult] = useState(null);
   const [smsCode, setSmsCode] = useState("");
   const [isSendingSms, setIsSendingSms] = useState(false);
+  const [smsCooldown, setSmsCooldown] = useState(0);
   const [isCheckingCode, setIsCheckingCode] = useState(false);
   const [isPhoneVerified, setIsPhoneVerified] = useState(false);
 
@@ -105,6 +108,7 @@ export default function Register() {
   const [successMessage, setSuccessMessage] = useState("");
 
   const recaptchaRef = useRef(null);
+  const recaptchaRenderPromiseRef = useRef(null);
 
   const phoneNumbers = onlyNumbers(phone);
   const isPhoneComplete = phoneNumbers.length === 11;
@@ -113,6 +117,13 @@ export default function Register() {
   const isPasswordValid = password.length === 8;
   const canCreateAccount =
     isUsernameValid && isPasswordValid && isPhoneVerified;
+  const canRequestSms =
+    Boolean(preRegister) &&
+    confirmedPerson &&
+    !confirmationResult &&
+    !isPhoneVerified &&
+    !isSendingSms &&
+    smsCooldown === 0;
 
   const navigate = useNavigate();
 
@@ -167,6 +178,22 @@ export default function Register() {
     searchPreRegister();
   }, [isPhoneComplete, phoneNumbers]);
 
+  useEffect(() => {
+    if (smsCooldown <= 0) return undefined;
+
+    const timer = window.setTimeout(() => {
+      setSmsCooldown((current) => Math.max(0, current - 1));
+    }, 1000);
+
+    return () => window.clearTimeout(timer);
+  }, [smsCooldown]);
+
+  useEffect(() => {
+    return () => {
+      clearRecaptcha();
+    };
+  }, []);
+
   function clearMessages() {
     setErrorMessage("");
     setSuccessMessage("");
@@ -178,7 +205,7 @@ export default function Register() {
         return "Número de telefone inválido.";
 
       case "auth/too-many-requests":
-        return "Muitas tentativas. Tente novamente mais tarde.";
+        return "Muitas tentativas. Aguarde alguns minutos antes de pedir outro cÃ³digo.";
 
       case "auth/quota-exceeded":
         return "Limite de SMS excedido. Tente novamente mais tarde.";
@@ -264,32 +291,37 @@ export default function Register() {
 
   async function getRecaptchaVerifier() {
     if (recaptchaRef.current) {
-      recaptchaRef.current.clear();
-      recaptchaRef.current = null;
+      return recaptchaRef.current;
     }
 
-    const container = document.getElementById("recaptcha-container");
-    if (container) {
-      container.innerHTML = "";
+    if (recaptchaRenderPromiseRef.current) {
+      await recaptchaRenderPromiseRef.current;
+      return recaptchaRef.current;
     }
 
-    recaptchaRef.current = new RecaptchaVerifier(auth, "recaptcha-container", {
+    const verifier = new RecaptchaVerifier(auth, "recaptcha-container", {
       size: "invisible",
       callback: () => {
         console.log("reCAPTCHA resolvido");
       },
       "expired-callback": () => {
         console.log("reCAPTCHA expirado");
-        recaptchaRef.current = null;
       },
     });
 
-    await recaptchaRef.current.render();
+    recaptchaRef.current = verifier;
+    recaptchaRenderPromiseRef.current = verifier.render().finally(() => {
+      recaptchaRenderPromiseRef.current = null;
+    });
 
-    return recaptchaRef.current;
+    await recaptchaRenderPromiseRef.current;
+
+    return verifier;
   }
 
   async function handleSendSms() {
+    if (!canRequestSms) return;
+
     try {
       clearMessages();
       setIsSendingSms(true);
@@ -303,9 +335,21 @@ export default function Register() {
 
       setConfirmationResult(result);
       setSuccessMessage("Código enviado por SMS.");
+      setSmsCooldown(SMS_COOLDOWN_SECONDS);
     } catch (error) {
       console.error(error);
-      clearRecaptcha();
+
+      if (
+        error.code === "auth/captcha-check-failed" ||
+        error.code === "auth/invalid-app-credential"
+      ) {
+        clearRecaptcha();
+      }
+
+      if (error.code === "auth/too-many-requests") {
+        setSmsCooldown(SMS_COOLDOWN_SECONDS);
+      }
+
       setErrorMessage(getSmsErrorMessage(error));
     } finally {
       setIsSendingSms(false);
@@ -429,6 +473,8 @@ export default function Register() {
       recaptchaRef.current = null;
     }
 
+    recaptchaRenderPromiseRef.current = null;
+
     const container = document.getElementById("recaptcha-container");
     if (container) {
       container.innerHTML = "";
@@ -531,10 +577,14 @@ export default function Register() {
               <button
                 type="button"
                 onClick={handleSendSms}
-                disabled={isSendingSms}
+                disabled={!canRequestSms}
                 className="mt-5 h-12 w-full rounded-full bg-app-primary text-sm font-black text-slate-950 shadow-[0_10px_30px_rgba(255,183,3,0.28)] transition active:scale-[0.98] disabled:opacity-50"
               >
-                {isSendingSms ? "Enviando..." : "Receber código SMS"}
+                {isSendingSms
+                  ? "Enviando..."
+                  : smsCooldown > 0
+                    ? `Aguarde ${smsCooldown}s`
+                    : "Receber código SMS"}
               </button>
             )}
 
