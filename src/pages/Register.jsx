@@ -1,3 +1,4 @@
+/* eslint-disable react/prop-types */
 import { useEffect, useRef, useState } from "react";
 import {
   doc,
@@ -43,6 +44,45 @@ function maskPhone(value) {
     3,
     7,
   )}-${numbers.slice(7)}`;
+}
+
+function DigitCodeInput({
+  value,
+  length,
+  onChange,
+  inputMode = "numeric",
+  autoComplete,
+}) {
+  return (
+    <div className="relative">
+      <input
+        value={value}
+        onChange={onChange}
+        maxLength={length}
+        inputMode={inputMode}
+        autoComplete={autoComplete}
+        className="absolute inset-0 z-10 h-full w-full opacity-0"
+      />
+
+      <div className="flex h-12 items-center justify-between rounded-[1.4rem] border border-white/10 bg-white/[0.06] px-4 shadow-[0_8px_40px_rgba(0,0,0,0.25)] backdrop-blur-2xl transition focus-within:border-app-primary/45 focus-within:bg-white/[0.08] focus-within:shadow-[0_0_22px_rgba(255,183,3,0.14)] focus-within:ring-4 focus-within:ring-app-primary/15">
+        {Array.from({ length }).map((_, index) => (
+          <span
+            key={index}
+            className={`
+              flex h-7 w-7 items-center justify-center rounded-full text-xs font-black uppercase transition-all duration-200
+              ${
+                value.length > index
+                  ? "bg-app-primary text-slate-950 shadow-[0_0_12px_rgba(255,183,3,0.55)]"
+                  : "bg-white/10 text-transparent"
+              }
+            `}
+          >
+            {value[index] || ""}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export default function Register() {
@@ -434,10 +474,11 @@ export default function Register() {
             <input
               value={phone}
               onChange={handlePhoneChange}
+              disabled={Boolean(preRegister)}
               placeholder="61 9 9999-9999"
               inputMode="numeric"
               autoComplete="tel"
-              className="h-12 w-full rounded-[1.4rem] border border-white/10 bg-white/[0.06] px-4 text-center text-sm tracking-[0.08em] text-white shadow-[0_8px_40px_rgba(0,0,0,0.25)] outline-none backdrop-blur-2xl transition placeholder:text-app-muted focus:border-app-primary/30 focus:bg-white/[0.08] focus:ring-4 focus:ring-app-primary/10"
+              className="h-12 w-full rounded-[1.4rem] border border-white/10 bg-white/[0.06] px-4 text-center text-sm tracking-[0.08em] text-white shadow-[0_8px_40px_rgba(0,0,0,0.25)] outline-none backdrop-blur-2xl transition placeholder:text-app-muted disabled:text-white/70 disabled:opacity-80 focus:border-app-primary/30 focus:bg-white/[0.08] focus:ring-4 focus:ring-app-primary/10"
             />
           )}
 
@@ -466,18 +507,18 @@ export default function Register() {
               <div className="mt-4 grid grid-cols-2 gap-3">
                 <button
                   type="button"
-                  onClick={() => setConfirmedPerson(true)}
-                  className="h-11 rounded-full bg-app-primary text-sm font-black text-slate-950 shadow-[0_10px_30px_rgba(255,183,3,0.28)] transition active:scale-[0.98]"
-                >
-                  Sim
-                </button>
-
-                <button
-                  type="button"
                   onClick={handleNotMe}
                   className="h-11 rounded-full border border-white/10 bg-white/[0.05] text-sm font-semibold text-[#fffaf0] transition active:scale-[0.98]"
                 >
                   Não
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setConfirmedPerson(true)}
+                  className="h-11 rounded-full bg-app-primary text-sm font-black text-slate-950 shadow-[0_10px_30px_rgba(255,183,3,0.28)] transition active:scale-[0.98]"
+                >
+                  Sou eu
                 </button>
               </div>
             </div>
@@ -499,15 +540,15 @@ export default function Register() {
 
           {confirmationResult && !isPhoneVerified && (
             <div className="mt-5 flex flex-col gap-3 transition-all">
-              <input
+              <DigitCodeInput
                 value={smsCode}
                 onChange={(event) => {
                   clearMessages();
                   setSmsCode(onlyNumbers(event.target.value).slice(0, 6));
                 }}
-                placeholder="código SMS"
+                length={6}
                 inputMode="numeric"
-                className="h-12 w-full rounded-[1.4rem] border border-white/10 bg-white/[0.06] px-4 text-center text-sm tracking-[0.35em] text-white shadow-[0_8px_40px_rgba(0,0,0,0.25)] outline-none backdrop-blur-2xl transition placeholder:tracking-normal placeholder:text-app-muted focus:border-app-primary/30 focus:bg-white/[0.08] focus:ring-4 focus:ring-app-primary/10"
+                autoComplete="one-time-code"
               />
 
               <button
@@ -531,33 +572,12 @@ export default function Register() {
                 className="h-12 w-full rounded-[1.4rem] border border-white/10 bg-white/[0.06] px-4 text-center text-sm text-white shadow-[0_8px_40px_rgba(0,0,0,0.25)] outline-none backdrop-blur-2xl transition placeholder:text-app-muted focus:border-app-primary/30 focus:bg-white/[0.08] focus:ring-4 focus:ring-app-primary/10"
               />
 
-              <div className="relative">
-                <input
-                  value={password}
-                  onChange={handlePasswordChange}
-                  maxLength={8}
-                  autoComplete="new-password"
-                  className="absolute inset-0 z-10 h-full w-full opacity-0"
-                />
-
-                <div className="flex h-12 items-center justify-between rounded-[1.4rem] border border-white/10 bg-white/[0.06] px-4 shadow-[0_8px_40px_rgba(0,0,0,0.25)] backdrop-blur-2xl transition focus-within:border-app-primary/30 focus-within:ring-4 focus-within:ring-app-primary/10">
-                  {Array.from({ length: 8 }).map((_, index) => (
-                    <span
-                      key={index}
-                      className={`
-                        flex h-7 w-7 items-center justify-center rounded-full text-xs font-black uppercase transition-all duration-200
-                        ${
-                          password.length > index
-                            ? "bg-app-primary text-slate-950 shadow-[0_0_12px_rgba(74,222,128,0.65)]"
-                            : "bg-white/10 text-transparent"
-                        }
-                      `}
-                    >
-                      {password[index] || ""}
-                    </span>
-                  ))}
-                </div>
-              </div>
+              <DigitCodeInput
+                value={password}
+                onChange={handlePasswordChange}
+                length={8}
+                autoComplete="new-password"
+              />
 
               <div className="mt-2 grid grid-cols-2 gap-3">
                 <button
