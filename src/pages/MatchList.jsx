@@ -1,31 +1,25 @@
 /* eslint-disable react/prop-types */
 import { useEffect, useMemo, useState } from "react";
 import {
-  CalendarPlus,
   Crown,
   PartyPopper,
-  Play,
-  ShieldCheck,
+  Star,
   UserPlus,
   Users,
   Volleyball,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 
 import { useAuth } from "../contexts/AuthContext";
-import ConfirmDeleteModal from "../components/ConfirmDeleteModal";
 import {
   PlayerMiniCard,
   ProfileStickerModal,
 } from "../components/profile/ProfileCardPreview";
 import { getPublicProfileBundles } from "../services/publicProfileService";
 import {
-  createVolleyList,
-  finishVolleyList,
-  getActiveVolleyList,
   joinVolleyList,
   leaveVolleyList,
-  removeVolleyListParticipant,
-  startVolleyMatch,
+  subscribeActiveVolleyList,
 } from "../services/volleyListService";
 
 function formatDate(date) {
@@ -51,7 +45,6 @@ function ListGroup({
   emptyText,
   actionLabel,
   onAction,
-  onRemove,
   disabledAction,
   isBusy,
   profilesById,
@@ -109,7 +102,6 @@ function ListGroup({
                 person={person}
                 profileBundle={profilesById[person.id]}
                 onOpen={() => onOpenProfile(person)}
-                onRemove={onRemove ? () => onRemove(person) : null}
               />
             </div>
           ))}
@@ -119,9 +111,7 @@ function ListGroup({
   );
 }
 
-function EmptyListState({ isAdmin, onStart, isSaving }) {
-  const [date, setDate] = useState("");
-
+function EmptyListState() {
   return (
     <section className="rounded-[2rem] border border-white/10 bg-[#17231f]/75 p-5 shadow-[0_18px_50px_rgba(0,0,0,0.28)] backdrop-blur-2xl">
       <div className="mb-5 flex items-start gap-3">
@@ -140,41 +130,9 @@ function EmptyListState({ isAdmin, onStart, isSaving }) {
         </div>
       </div>
 
-      {isAdmin ? (
-        <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.04] p-4">
-          <label className="mb-2 block text-xs font-bold text-[#9aa89f]">
-            Data da pelada
-          </label>
-
-          <input
-            type="date"
-            value={date}
-            onChange={(event) => setDate(event.target.value)}
-            className="mb-3 w-full rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm font-bold text-[#fffaf0] outline-none focus:border-app-primary/40"
-          />
-
-          <button
-            type="button"
-            onClick={() => onStart(date)}
-            disabled={!date || isSaving}
-            className={`
-              flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-black active:scale-[0.98]
-              ${
-                date && !isSaving
-                  ? "bg-app-primary text-[#17231f] shadow-[0_0_24px_rgba(255,183,3,0.22)]"
-                  : "cursor-not-allowed bg-white/[0.04] text-[#66736b]"
-              }
-            `}
-          >
-            <CalendarPlus size={18} />
-            {isSaving ? "Abrindo..." : "Abrir lista"}
-          </button>
-        </div>
-      ) : (
-        <div className="rounded-[1.5rem] border border-dashed border-white/10 bg-white/[0.04] p-4 text-sm font-semibold text-[#9aa89f]">
-          Fica de olho. Assim que a lista abrir, os botoes de entrada aparecem.
-        </div>
-      )}
+      <div className="rounded-[1.5rem] border border-dashed border-white/10 bg-white/[0.04] p-4 text-sm font-semibold text-[#9aa89f]">
+        Fica de olho. Assim que a lista abrir, os botoes de entrada aparecem.
+      </div>
     </section>
   );
 }
@@ -188,27 +146,26 @@ export default function MatchList() {
   const [errorMessage, setErrorMessage] = useState("");
   const [profilesById, setProfilesById] = useState({});
   const [selectedPerson, setSelectedPerson] = useState(null);
-  const [removeTarget, setRemoveTarget] = useState(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
 
-  async function loadList() {
+  useEffect(() => {
     setIsLoading(true);
 
-    try {
-      setErrorMessage("");
-      const activeList = await getActiveVolleyList();
-      setList(activeList);
-    } catch (error) {
-      console.error(error);
-      setList(null);
-      setErrorMessage(getErrorMessage(error));
-    } finally {
-      setIsLoading(false);
-    }
-  }
+    const unsubscribe = subscribeActiveVolleyList({
+      onChange: (activeList) => {
+        setList(activeList);
+        setErrorMessage("");
+        setIsLoading(false);
+      },
+      onError: (error) => {
+        console.error(error);
+        setList(null);
+        setErrorMessage(getErrorMessage(error));
+        setIsLoading(false);
+      },
+    });
 
-  useEffect(() => {
-    loadList();
+    return unsubscribe;
   }, []);
 
   useEffect(() => {
@@ -241,7 +198,7 @@ export default function MatchList() {
   const setters = list?.setters || [];
   const players = list?.players || [];
   const totalConfirmed = setters.length + players.length;
-  const totalLimit = list?.playersLimit || 26;
+  const totalLimit = (list?.settersLimit || 0) + (list?.playersLimit || 0);
 
   const userGroup = useMemo(() => {
     if (!list || !userData?.id) return null;
@@ -265,24 +222,12 @@ export default function MatchList() {
       setBusyAction(actionName);
 
       await action();
-      await loadList();
     } catch (error) {
       console.error(error);
       setErrorMessage(getErrorMessage(error));
     } finally {
       setBusyAction("");
     }
-  }
-
-  function handleCreateList(date) {
-    if (!date || !userData || !isAdmin) return;
-
-    runListAction("create", () =>
-      createVolleyList({
-        date,
-        adminUser: userData,
-      }),
-    );
   }
 
   function handleJoin(group) {
@@ -306,36 +251,6 @@ export default function MatchList() {
         userId: userData.id,
       }),
     );
-  }
-
-  function handleRemove(person) {
-    setRemoveTarget(person);
-  }
-
-  async function handleConfirmRemove() {
-    if (!removeTarget) return;
-    if (!list || !isAdmin) return;
-
-    await runListAction(`remove-${removeTarget.id}`, () =>
-      removeVolleyListParticipant({
-        listId: list.id,
-        userId: removeTarget.id,
-      }),
-    );
-
-    setRemoveTarget(null);
-  }
-
-  function handleStartMatch() {
-    if (!list || !isAdmin) return;
-
-    runListAction("start-match", () => startVolleyMatch({ listId: list.id }));
-  }
-
-  function handleFinishList() {
-    if (!list || !isAdmin) return;
-
-    runListAction("finish", () => finishVolleyList({ listId: list.id }));
   }
 
   async function handleOpenProfile(person) {
@@ -381,8 +296,19 @@ export default function MatchList() {
               </p>
             </div>
 
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-app-primary/15 text-app-primary">
-              <Volleyball size={20} />
+            <div className="flex shrink-0 items-center gap-2">
+              {isAdmin && (
+                <Link
+                  to="/admin/volley-list"
+                  className="flex h-10 w-10 items-center justify-center rounded-2xl border border-app-primary/20 bg-app-primary/10 text-app-primary transition active:scale-95"
+                >
+                  <Star size={18} />
+                </Link>
+              )}
+
+              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-app-primary/15 text-app-primary">
+                <Volleyball size={20} />
+              </div>
             </div>
           </div>
 
@@ -410,11 +336,7 @@ export default function MatchList() {
         )}
 
         {!list && (
-          <EmptyListState
-            isAdmin={isAdmin}
-            isSaving={busyAction === "create"}
-            onStart={handleCreateList}
-          />
+          <EmptyListState />
         )}
 
         {list && (
@@ -454,7 +376,6 @@ export default function MatchList() {
               onAction={() =>
                 userGroup === "setter" ? handleLeave() : handleJoin("setter")
               }
-              onRemove={isAdmin && isListOpen ? handleRemove : null}
             />
 
             <ListGroup
@@ -474,7 +395,6 @@ export default function MatchList() {
               onAction={() =>
                 userGroup === "player" ? handleLeave() : handleJoin("player")
               }
-              onRemove={isAdmin && isListOpen ? handleRemove : null}
             />
 
             <section className="rounded-[1.7rem] border border-white/10 bg-[#17231f]/75 p-4 shadow-[0_14px_40px_rgba(0,0,0,0.24)] backdrop-blur-2xl">
@@ -501,54 +421,6 @@ export default function MatchList() {
                 Pedir vaga para convidado
               </button>
             </section>
-
-            {isAdmin && (
-              <section className="space-y-3 rounded-[1.7rem] border border-white/10 bg-white/[0.04] p-4">
-                <div className="flex items-center gap-2">
-                  <ShieldCheck size={17} className="text-app-primary" />
-                  <h2 className="text-sm font-black text-[#fffaf0]">
-                    Controle do admin
-                  </h2>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleStartMatch}
-                  disabled={!isListOpen || busyAction === "start-match"}
-                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-app-primary px-4 py-3 text-sm font-black text-[#17231f] shadow-[0_0_24px_rgba(255,183,3,0.18)] active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-white/[0.04] disabled:text-[#66736b] disabled:shadow-none"
-                >
-                  <Play size={17} />
-                  {busyAction === "start-match"
-                    ? "Iniciando..."
-                    : "Iniciar pelada"}
-                </button>
-
-                <button
-                  type="button"
-                  disabled
-                  className="w-full cursor-not-allowed rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-sm font-black text-[#66736b] active:scale-[0.98]"
-                >
-                  Adicionar usuario manualmente
-                </button>
-
-                <button
-                  type="button"
-                  disabled
-                  className="w-full cursor-not-allowed rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-sm font-black text-[#66736b] active:scale-[0.98]"
-                >
-                  Adicionar convidado manualmente
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleFinishList}
-                  disabled={busyAction === "finish"}
-                  className="w-full rounded-2xl bg-red-500/10 px-4 py-3 text-sm font-black text-red-300 active:scale-[0.98] disabled:opacity-50"
-                >
-                  {busyAction === "finish" ? "Finalizando..." : "Encerrar lista"}
-                </button>
-              </section>
-            )}
 
             {!isAdmin && (
               <section className="rounded-[1.7rem] border border-white/10 bg-white/[0.04] p-4">
@@ -578,16 +450,6 @@ export default function MatchList() {
         />
       )}
 
-      {removeTarget && (
-        <ConfirmDeleteModal
-          title="Remover da lista?"
-          description={`Deseja remover ${removeTarget.name || "esse jogador"} da lista?`}
-          confirmText="Remover"
-          isLoading={busyAction === `remove-${removeTarget.id}`}
-          onClose={() => setRemoveTarget(null)}
-          onConfirm={handleConfirmRemove}
-        />
-      )}
     </main>
   );
 }

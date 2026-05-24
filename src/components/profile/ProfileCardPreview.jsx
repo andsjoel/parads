@@ -16,34 +16,29 @@ function getDisplayName(person, bundle) {
   );
 }
 
-function getLevel(bundle) {
-  return bundle?.user?.progression?.level || 1;
-}
-
 export function PlayerMiniCard({ person, profileBundle, onOpen, onRemove }) {
   const profile = profileBundle?.user?.profile || {};
   const { backgroundUrl, profilePicUrl, profilePicBorderUrl } =
     getProfileAssetUrls(profile);
   const displayName = getDisplayName(person, profileBundle);
-  const username = profileBundle?.user?.username || person.username;
 
   return (
-    <div className="group relative min-w-0 flex-1 overflow-hidden rounded-2xl border border-white/10 bg-[#14211d] shadow-[0_10px_26px_rgba(0,0,0,0.18)] transition hover:border-app-primary/30">
+    <div className="group relative min-w-0 flex-1 overflow-visible rounded-2xl border border-white/10 bg-[#14211d] shadow-[0_10px_26px_rgba(0,0,0,0.18)] transition hover:border-app-primary/30">
       {backgroundUrl && (
         <img
           src={backgroundUrl}
           alt=""
-          className="absolute inset-0 h-full w-full object-cover opacity-35"
+          className="absolute inset-0 h-full w-full rounded-2xl object-cover opacity-35"
         />
       )}
 
-      <div className="absolute inset-0 bg-gradient-to-r from-[#14211d] via-[#14211d]/82 to-transparent" />
-      <div className="absolute inset-0 bg-gradient-to-l from-black/15 via-transparent to-black/20" />
+      <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-[#14211d] via-[#14211d]/82 to-transparent" />
+      <div className="absolute inset-0 rounded-2xl bg-gradient-to-l from-black/15 via-transparent to-black/20" />
 
       <button
         type="button"
         onClick={onOpen}
-        className={`relative flex w-full min-w-0 items-center gap-3 px-3 py-2 text-left transition active:scale-[0.99] ${
+        className={`relative flex h-9 w-full min-w-0 items-center gap-3 px-2.5 text-left transition active:scale-[0.99] ${
           onRemove ? "pr-9" : ""
         }`}
       >
@@ -64,21 +59,9 @@ export function PlayerMiniCard({ person, profileBundle, onOpen, onRemove }) {
         </div>
 
         <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 items-center gap-2">
-            <span className="truncate text-sm font-black text-[#fffaf0]">
-              {displayName}
-            </span>
-
-            <span className="shrink-0 rounded-full border border-app-primary/25 bg-app-primary/15 px-2 py-0.5 text-[10px] font-black text-app-primary">
-              Nv. {getLevel(profileBundle)}
-            </span>
-          </div>
-
-          {username && (
-            <span className="mt-0.5 block truncate text-xs font-semibold text-white/55">
-              @{username}
-            </span>
-          )}
+          <span className="block truncate text-sm font-black leading-none text-[#fffaf0]">
+            {displayName}
+          </span>
         </div>
       </button>
 
@@ -86,7 +69,7 @@ export function PlayerMiniCard({ person, profileBundle, onOpen, onRemove }) {
         <button
           type="button"
           onClick={onRemove}
-          className="absolute right-1.5 top-1.5 z-10 flex h-7 w-7 items-center justify-center rounded-full border border-red-300/20 bg-black/30 text-red-200/85 backdrop-blur-md transition hover:bg-red-500/20 hover:text-red-100 active:scale-95"
+          className="absolute right-1.5 top-1/2 z-10 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border border-red-300/20 bg-black/30 text-red-200/85 backdrop-blur-md transition hover:bg-red-500/20 hover:text-red-100 active:scale-95"
         >
           <X size={13} strokeWidth={3} />
         </button>

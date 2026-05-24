@@ -21,7 +21,7 @@ const adminServices = [
     title: "Lista",
     description: "Criar e organizar a lista",
     icon: ShieldCheck,
-    to: "/matches",
+    to: "/admin/volley-list",
     disabled: false,
   },
   {

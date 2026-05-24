@@ -116,12 +116,7 @@ export default function BottomNav() {
             <NavLink
               key={item.to}
               to={item.to}
-              onClick={(event) => {
-                if (event.currentTarget.getAttribute("aria-current") === "page") {
-                  event.preventDefault();
-                  return;
-                }
-
+              onClick={() => {
                 setIsExpanded(false);
                 rotateBackground();
               }}
@@ -167,13 +162,7 @@ export default function BottomNav() {
         >
           <NavLink
             to="/admin"
-            onClick={(event) => {
-              if (event.currentTarget.getAttribute("aria-current") === "page") {
-                event.preventDefault();
-                setIsExpanded(true);
-                return;
-              }
-
+            onClick={() => {
               setIsExpanded(true);
               rotateBackground();
             }}

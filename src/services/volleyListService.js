@@ -3,6 +3,7 @@ import {
   doc,
   getDocs,
   limit,
+  onSnapshot,
   query,
   runTransaction,
   serverTimestamp,
@@ -65,6 +66,31 @@ export async function getActiveVolleyList() {
     id: activeList.id,
     ...activeList.data(),
   };
+}
+
+export function subscribeActiveVolleyList({ onChange, onError }) {
+  const q = query(
+    collection(db, COLLECTION_NAME),
+    where("status", "in", ["open", "in_progress"]),
+    limit(1),
+  );
+
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const activeList = snapshot.docs[0];
+
+      onChange(
+        activeList
+          ? {
+              id: activeList.id,
+              ...activeList.data(),
+            }
+          : null,
+      );
+    },
+    onError,
+  );
 }
 
 export async function createVolleyList({ date, adminUser }) {
