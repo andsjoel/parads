@@ -2,16 +2,17 @@ import { useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
   CheckCircle,
+  Mars,
   Plus,
   Search,
   Trash2,
   UserPlus,
+  Venus,
   X,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import {
   createPreRegister,
-  deletePreRegister,
   getPreRegisters,
 } from "../../services/preRegisterService";
 
@@ -44,6 +45,11 @@ const roleOptions = [
   { label: "Admin", value: "admin" },
 ];
 
+const sexOptions = [
+  { label: "Homem", value: "male", Icon: Mars },
+  { label: "Mulher", value: "female", Icon: Venus },
+];
+
 export default function PreRegistersManager() {
   const [preRegisters, setPreRegisters] = useState([]);
   const [search, setSearch] = useState("");
@@ -56,6 +62,7 @@ export default function PreRegistersManager() {
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [role, setRole] = useState("member");
+  const [sex, setSex] = useState("male");
   const [isSaving, setIsSaving] = useState(false);
 
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -112,11 +119,13 @@ export default function PreRegistersManager() {
         phone: phoneNumbers,
         type: "member",
         role,
+        sex,
       });
 
       setFullName("");
       setPhone("");
       setRole("member");
+      setSex("male");
       setShowModal(false);
 
       await loadPreRegisters();
@@ -260,6 +269,15 @@ export default function PreRegistersManager() {
                   <span className="rounded-full bg-white/[0.06] px-3 py-1 text-xs font-semibold text-slate-400">
                     {item.claimed ? "Cadastrado" : "Pendente"}
                   </span>
+
+                  <span className="inline-flex items-center gap-1 rounded-full bg-white/[0.06] px-3 py-1 text-xs font-semibold text-slate-400">
+                    {item.sex === "female" ? (
+                      <Venus size={13} className="text-app-accent" />
+                    ) : (
+                      <Mars size={13} className="text-app-secondary" />
+                    )}
+                    {item.sex === "female" ? "Mulher" : "Homem"}
+                  </span>
                 </div>
               </div>
             ))}
@@ -323,6 +341,47 @@ export default function PreRegistersManager() {
                   </option>
                 ))}
               </select>
+
+              <div
+                className="relative grid grid-cols-2 rounded-full border border-white/10 bg-white/[0.06] p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]"
+                role="radiogroup"
+                aria-label="Sexo"
+              >
+                <span
+                  className={`absolute bottom-1 top-1 w-[calc(50%-0.25rem)] rounded-full transition-all duration-300 ease-out ${
+                    sex === "female"
+                      ? "left-[calc(50%+0.125rem)] bg-app-accent shadow-[0_0_24px_rgba(251,113,133,0.34)]"
+                      : "left-1 bg-app-secondary shadow-[0_0_24px_rgba(45,212,191,0.30)]"
+                  }`}
+                />
+
+                {sexOptions.map(({ label, value, Icon }) => {
+                  const isSelected = sex === value;
+
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      role="radio"
+                      aria-checked={isSelected}
+                      onClick={() => setSex(value)}
+                      className={`relative z-10 flex h-11 items-center justify-center gap-2 rounded-full text-sm font-black transition-all duration-300 active:scale-[0.98] ${
+                        isSelected
+                          ? "scale-[1.02] text-slate-950"
+                          : "text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      <Icon
+                        size={18}
+                        className={`transition-transform duration-300 ${
+                          isSelected ? "scale-110" : ""
+                        }`}
+                      />
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
 
               <button
                 type="submit"

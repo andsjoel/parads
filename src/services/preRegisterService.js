@@ -32,6 +32,7 @@ export async function createPreRegister({
   phone,
   type = "member",
   role = "member",
+  sex = "male",
 }) {
   const phoneWithCountry = `55${phone}`;
 
@@ -41,6 +42,7 @@ export async function createPreRegister({
 
     type,
     role,
+    sex,
 
     enabled: true,
     claimed: false,

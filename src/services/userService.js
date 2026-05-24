@@ -1,5 +1,4 @@
 import {
-  deleteDoc,
   doc,
   getDoc,
   writeBatch,
@@ -57,6 +56,10 @@ export async function deleteUserCascadeByPreRegister(preRegisterId) {
 
 export async function createUserBaseData({ uid, preRegister, username, authEmail }) {
   const cleanUsername = username.trim().toLowerCase();
+  const type = preRegister.type || "member";
+  const role = preRegister.role || "member";
+  const sex = preRegister.sex || "male";
+  const now = new Date();
 
   const batch = writeBatch(db);
 
@@ -72,9 +75,10 @@ export async function createUserBaseData({ uid, preRegister, username, authEmail
     fullName: preRegister.fullName,
     username: cleanUsername,
     authEmail,
-    type: preRegister.type,
+    type,
+    sex,
     
-    role: preRegister.role,
+    role,
 
     profile: {
       displayName: preRegister.fullName,
@@ -122,7 +126,7 @@ export async function createUserBaseData({ uid, preRegister, username, authEmail
       {
         id: "member",
         level: 1,
-        unlockedAt: serverTimestamp(),
+        unlockedAt: now,
       },
     ],
 
