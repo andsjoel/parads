@@ -10,6 +10,11 @@ import {
 } from "firebase/firestore";
 
 import { db } from "../firebase/firebase";
+import {
+  generateAccessCode,
+  generateAccessCodeSalt,
+  hashAccessCode,
+} from "../utils/accessCode";
 
 const COLLECTION_NAME = "pre_registered_users";
 
@@ -35,6 +40,9 @@ export async function createPreRegister({
   sex = "male",
 }) {
   const phoneWithCountry = `55${phone}`;
+  const temporaryCode = generateAccessCode();
+  const accessCodeSalt = generateAccessCodeSalt();
+  const accessCodeHash = await hashAccessCode(temporaryCode, accessCodeSalt);
 
   const payload = {
     fullName: fullName.trim(),
@@ -47,6 +55,8 @@ export async function createPreRegister({
     enabled: true,
     claimed: false,
     userId: null,
+    accessCodeHash,
+    accessCodeSalt,
 
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -57,6 +67,7 @@ export async function createPreRegister({
   return {
     id: phoneWithCountry,
     ...payload,
+    temporaryCode,
   };
 }
 

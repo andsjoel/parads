@@ -61,7 +61,7 @@ export default function BottomNav() {
   }
 
   return (
-    <div className="pointer-events-none fixed bottom-4 left-0 right-0 z-50 flex justify-center px-5">
+    <div className="pointer-events-none fixed bottom-0 left-0 right-0 z-50 flex justify-center">
 
       <div
         className="
@@ -69,7 +69,7 @@ export default function BottomNav() {
           pointer-events-auto
           absolute
           inset-x-0
-          bottom-[-40px]
+          bottom-0
           h-30
           overflow-hidden
         "
@@ -90,20 +90,18 @@ export default function BottomNav() {
             absolute inset-0
 
             bg-gradient-to-t
-            from-[#101716]/95
-            via-[#101716]/45
+            from-[#210019]/95
+            via-[#210019]/45
             to-transparent
           "
         />
       </div>
       <nav
-  className="
+  className="app-bottom-nav
     pointer-events-auto
-    flex items-center gap-1.5
-    rounded-full
-    border border-white/12
-    bg-[#17231f]/75
-    px-2 py-1.5
+    relative z-10
+    flex w-[min(88vw,420px)] items-center justify-center gap-2
+    px-5 pb-[calc(10px+env(safe-area-inset-bottom))] pt-6
     shadow-[0_14px_40px_rgba(0,0,0,0.32)]
     backdrop-blur-3xl
     transition-all duration-300
@@ -126,7 +124,7 @@ export default function BottomNav() {
                   transition-all duration-300 active:scale-95
                   ${
                     isActive
-                      ? "bg-app-primary text-[#1b1300] shadow-[0_0_22px_rgba(255,183,3,0.38)]"
+                      ? "bg-[#5bc0ff] text-[#210019] shadow-[0_0_22px_rgba(91,192,255,0.38)]"
                       : "text-stone-300 hover:bg-white/[0.07] hover:text-white"
                   }
                 `
@@ -171,8 +169,8 @@ export default function BottomNav() {
                 flex h-11 w-11 shrink-0 items-center justify-center rounded-full
                 transition-all duration-300 active:scale-95
                 ${
-                  isActive
-                    ? "bg-app-primary text-[#1b1300] shadow-[0_0_22px_rgba(255,183,3,0.38)]"
+                    isActive
+                    ? "bg-[#5bc0ff] text-[#210019] shadow-[0_0_22px_rgba(91,192,255,0.38)]"
                     : "text-stone-300 hover:bg-white/[0.07] hover:text-white"
                 }
               `
@@ -200,7 +198,7 @@ export default function BottomNav() {
           
       {showLogoutModal && (
         <div className="pointer-events-auto fixed inset-0 z-[90] flex items-end justify-center bg-black/60 px-5 pb-5 backdrop-blur-sm">
-          <div className="w-full max-w-[420px] rounded-[1.8rem] border border-white/10 bg-[#13201c]/95 p-5 shadow-[0_20px_60px_rgba(0,0,0,0.45)] backdrop-blur-3xl">
+          <div className="w-full max-w-[420px] border border-white/10 bg-[#210019]/95 p-5 shadow-[0_20px_60px_rgba(0,0,0,0.45)] backdrop-blur-3xl">
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-lg font-black text-white">Sair do app?</h2>

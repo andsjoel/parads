@@ -34,8 +34,7 @@ export default function Login() {
     try {
       setIsLoading(true);
 
-      const cleanLogin = login.trim().toLowerCase();
-      const authEmail = buildAuthEmail(cleanLogin);
+      const authEmail = buildAuthEmail(login.trim().toLowerCase());
 
       const credential = await signInWithEmailAndPassword(
         auth,
@@ -253,7 +252,7 @@ export default function Login() {
             active:scale-[0.98]
           "
         >
-          Entrar para o time
+          Primeiro acesso
         </Link>
       </div>
     </main>

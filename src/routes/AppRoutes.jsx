@@ -1,7 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 
-import Login from "../pages/Login";
-import Register from "../pages/Register";
+import Login from "../pages/LoginExperience";
+import FirstAccess from "../pages/FirstAccessExperience";
 import Feed from "../pages/Feed";
 import MatchList from "../pages/MatchList";
 import Profile from "../pages/Profile";
@@ -17,7 +17,7 @@ export default function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
-      <Route path="/register" element={<Register />} />
+      <Route path="/register" element={<FirstAccess />} />
 
       <Route
         path="/"

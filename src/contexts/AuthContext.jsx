@@ -1,9 +1,8 @@
 /* eslint-disable react/prop-types, react-refresh/only-export-components */
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { onAuthStateChanged, signOut } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
-
-import { auth, db } from "../firebase/firebase";
+import { auth } from "../firebase/firebase";
+import { clearSessionData, preloadUserSession } from "../services/sessionDataService";
 
 const AuthContext = createContext(null);
 
@@ -13,7 +12,7 @@ function wait(milliseconds) {
   });
 }
 
-async function getUserDocWithRetry(userRef) {
+async function getUserSessionWithRetry(uid) {
   const delays = [0, 250, 500, 1000, 1500];
 
   for (const delay of delays) {
@@ -21,11 +20,8 @@ async function getUserDocWithRetry(userRef) {
       await wait(delay);
     }
 
-    const userSnap = await getDoc(userRef);
-
-    if (userSnap.exists()) {
-      return userSnap;
-    }
+    const session = await preloadUserSession(uid);
+    if (session) return session;
   }
 
   return null;
@@ -34,6 +30,7 @@ async function getUserDocWithRetry(userRef) {
 export function AuthProvider({ children }) {
   const [userAuth, setUserAuth] = useState(null);
   const [userData, setUserData] = useState(null);
+  const [sessionData, setSessionData] = useState(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
 
   useEffect(() => {
@@ -42,15 +39,16 @@ export function AuthProvider({ children }) {
         setLoadingAuth(true);
 
         if (!firebaseUser) {
+          clearSessionData();
           setUserAuth(null);
           setUserData(null);
+          setSessionData(null);
           return;
         }
 
-        const userRef = doc(db, "users", firebaseUser.uid);
-        const userSnap = await getUserDocWithRetry(userRef);
+        const session = await getUserSessionWithRetry(firebaseUser.uid);
 
-        if (!userSnap) {
+        if (!session) {
           console.warn("Usuário autenticado, mas sem registro no Firestore.");
           await signOut(auth);
 
@@ -60,16 +58,15 @@ export function AuthProvider({ children }) {
         }
 
         setUserAuth(firebaseUser);
-        setUserData({
-          id: userSnap.id,
-          ...userSnap.data(),
-        });
+        setUserData(session.user);
+        setSessionData(session);
       } catch (error) {
         console.error("Erro ao carregar usuário logado:", error);
 
         await signOut(auth);
         setUserAuth(null);
         setUserData(null);
+        setSessionData(null);
       } finally {
         setLoadingAuth(false);
       }
@@ -87,6 +84,7 @@ export function AuthProvider({ children }) {
     return {
       userAuth,
       userData,
+      sessionData,
       loadingAuth,
 
       isAuthenticated: !!userAuth && !!userData,
@@ -97,7 +95,7 @@ export function AuthProvider({ children }) {
       isMember: !isGuest,
       isGuest,
     };
-  }, [userAuth, userData, loadingAuth]);
+  }, [userAuth, userData, sessionData, loadingAuth]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

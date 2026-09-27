@@ -6,11 +6,13 @@ import {
   Star,
   UserPlus,
   Users,
+  Venus,
   Volleyball,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { useAuth } from "../contexts/AuthContext";
+import OrbitLoader from "../components/OrbitLoader";
 import {
   PlayerMiniCard,
   ProfileStickerModal,
@@ -37,7 +39,29 @@ function getErrorMessage(error) {
   return error?.message || "Nao foi possivel atualizar a lista.";
 }
 
-function ListGroup({
+function EmptyListState() {
+  return (
+    <section className="rounded-[2rem] border border-white/10 bg-[#17231f]/75 p-5 shadow-[0_18px_50px_rgba(0,0,0,0.28)] backdrop-blur-2xl">
+      <div className="mb-5 flex items-start gap-3">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-app-primary/15 text-app-primary">
+          <PartyPopper size={24} />
+        </div>
+
+        <div>
+          <p className="text-xl font-black text-[#fffaf0]">
+            A lista ainda nao abriu
+          </p>
+          <p className="mt-1 text-sm leading-relaxed text-[#9aa89f]">
+            Quando um admin liberar a pelada, a presenca e a quadra aparecem
+            por aqui.
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function PresenceGroup({
   title,
   icon: Icon,
   limit,
@@ -70,14 +94,11 @@ function ListGroup({
           type="button"
           onClick={onAction}
           disabled={disabledAction || isBusy}
-          className={`
-            rounded-xl px-3 py-2 text-xs font-black transition active:scale-[0.98]
-            ${
-              disabledAction || isBusy
-                ? "cursor-not-allowed bg-white/[0.04] text-[#66736b]"
-                : "bg-app-primary text-[#17231f]"
-            }
-          `}
+          className={`rounded-xl px-3 py-2 text-xs font-black transition active:scale-[0.98] ${
+            disabledAction || isBusy
+              ? "cursor-not-allowed bg-white/[0.04] text-[#66736b]"
+              : "bg-app-primary text-[#17231f]"
+          }`}
         >
           {isBusy ? "..." : actionLabel}
         </button>
@@ -90,10 +111,7 @@ function ListGroup({
       ) : (
         <div className="space-y-2">
           {people.map((person, index) => (
-            <div
-              key={person.id}
-              className="flex items-center gap-2"
-            >
+            <div key={person.id} className="flex items-center gap-2">
               <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.05] text-[10px] font-black text-app-primary">
                 {index + 1}
               </span>
@@ -111,27 +129,86 @@ function ListGroup({
   );
 }
 
-function EmptyListState() {
+function LivePlayer({ player, profileBundle, onOpen }) {
   return (
-    <section className="rounded-[2rem] border border-white/10 bg-[#17231f]/75 p-5 shadow-[0_18px_50px_rgba(0,0,0,0.28)] backdrop-blur-2xl">
-      <div className="mb-5 flex items-start gap-3">
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-app-primary/15 text-app-primary">
-          <PartyPopper size={24} />
-        </div>
-
-        <div>
-          <p className="text-xl font-black text-[#fffaf0]">
-            A lista ainda nao abriu
-          </p>
-          <p className="mt-1 text-sm leading-relaxed text-[#9aa89f]">
-            Quando um admin liberar a pelada, todo mundo entra por aqui: jogador,
-            levantador e convidados.
-          </p>
+    <button
+      type="button"
+      onClick={player.userId ? onOpen : undefined}
+      className="flex min-h-11 w-full items-center justify-between gap-2 rounded-2xl border border-white/10 bg-white/[0.045] px-3 py-2 text-left"
+    >
+      <div className="min-w-0">
+        <p className="truncate text-sm font-black text-[#fffaf0]">
+          {profileBundle?.user?.profile?.displayName ||
+            profileBundle?.user?.fullName ||
+            player.displayName}
+        </p>
+        <div className="mt-1 flex items-center gap-1.5">
+          {player.kind === "ghost" && (
+            <span className="rounded-full bg-white/[0.07] px-2 py-0.5 text-[10px] font-black text-[#9aa89f]">
+              Ghost
+            </span>
+          )}
+          {player.isSetter && (
+            <span className="rounded-full bg-app-primary/15 px-2 py-0.5 text-[10px] font-black text-app-primary">
+              Lev.
+            </span>
+          )}
+          {player.sex === "female" && (
+            <span className="rounded-full bg-app-accent/15 px-2 py-0.5 text-[10px] font-black text-app-accent">
+              Mulher
+            </span>
+          )}
         </div>
       </div>
 
-      <div className="rounded-[1.5rem] border border-dashed border-white/10 bg-white/[0.04] p-4 text-sm font-semibold text-[#9aa89f]">
-        Fica de olho. Assim que a lista abrir, os botoes de entrada aparecem.
+      {player.stats?.wins > 0 && (
+        <span className="rounded-full bg-app-primary/15 px-2.5 py-1 text-xs font-black text-app-primary">
+          {player.stats.wins}V
+        </span>
+      )}
+    </button>
+  );
+}
+
+function LiveTeam({ title, team, playersByEntryId, profilesById, onOpenProfile }) {
+  const players = team?.players || [];
+
+  return (
+    <section className="rounded-[1.6rem] border border-white/10 bg-[#17231f]/75 p-4 shadow-[0_14px_40px_rgba(0,0,0,0.24)] backdrop-blur-2xl">
+      <div className="mb-3 flex items-center justify-between">
+        <div>
+          <h2 className="text-sm font-black text-[#fffaf0]">{title}</h2>
+          <p className="text-xs font-semibold text-[#9aa89f]">
+            {players.length}/6 {team?.wins ? `· ${team.wins} vitorias` : ""}
+          </p>
+        </div>
+        <Volleyball size={18} className="text-app-primary" />
+      </div>
+
+      <div className="space-y-2">
+        {Array.from({ length: 6 }).map((_, index) => {
+          const player = playersByEntryId[players[index]];
+
+          if (!player) {
+            return (
+              <div
+                key={`${team?.id}-${index}`}
+                className="flex h-11 items-center justify-center rounded-2xl border border-dashed border-white/10 bg-white/[0.025] text-xs font-black text-[#66736b]"
+              >
+                Vaga
+              </div>
+            );
+          }
+
+          return (
+            <LivePlayer
+              key={player.entryId}
+              player={player}
+              profileBundle={profilesById[player.userId]}
+              onOpen={() => onOpenProfile(player)}
+            />
+          );
+        })}
       </div>
     </section>
   );
@@ -169,48 +246,49 @@ export default function MatchList() {
   }, []);
 
   useEffect(() => {
-    async function loadParticipantProfiles() {
-      const participants = [
-        ...(list?.setters || []),
-        ...(list?.players || []),
-      ];
+    async function loadProfiles() {
+      const ids = [
+        ...(list?.setters || []).map((person) => person.id),
+        ...(list?.players || []).map((person) => person.id),
+        ...(list?.matchPlayers || []).map((person) => person.userId),
+      ].filter(Boolean);
 
-      if (!participants.length) {
+      if (!ids.length) {
         setProfilesById({});
         return;
       }
 
       try {
-        const nextProfilesById = await getPublicProfileBundles(
-          participants.map((person) => person.id),
-        );
-
-        setProfilesById(nextProfilesById);
+        setProfilesById(await getPublicProfileBundles(ids));
       } catch (error) {
         console.error(error);
       }
     }
 
-    loadParticipantProfiles();
+    loadProfiles();
   }, [list]);
 
   const isListOpen = list?.status === "open";
+  const isInProgress = list?.status === "in_progress";
   const setters = list?.setters || [];
   const players = list?.players || [];
   const totalConfirmed = setters.length + players.length;
   const totalLimit = (list?.settersLimit || 0) + (list?.playersLimit || 0);
+  const teams = list?.teams || [];
+  const playersByEntryId = useMemo(() => {
+    return (list?.matchPlayers || []).reduce((result, player) => {
+      if (player.removedAt) return result;
+      return {
+        ...result,
+        [player.entryId]: player,
+      };
+    }, {});
+  }, [list?.matchPlayers]);
 
   const userGroup = useMemo(() => {
     if (!list || !userData?.id) return null;
-
-    if ((list.setters || []).some((person) => person.id === userData.id)) {
-      return "setter";
-    }
-
-    if ((list.players || []).some((person) => person.id === userData.id)) {
-      return "player";
-    }
-
+    if ((list.setters || []).some((person) => person.id === userData.id)) return "setter";
+    if ((list.players || []).some((person) => person.id === userData.id)) return "player";
     return null;
   }, [list, userData?.id]);
 
@@ -220,7 +298,6 @@ export default function MatchList() {
     try {
       setErrorMessage("");
       setBusyAction(actionName);
-
       await action();
     } catch (error) {
       console.error(error);
@@ -232,7 +309,6 @@ export default function MatchList() {
 
   function handleJoin(group) {
     if (!list || !userData || !canChangeList) return;
-
     runListAction(`join-${group}`, () =>
       joinVolleyList({
         listId: list.id,
@@ -244,7 +320,6 @@ export default function MatchList() {
 
   function handleLeave() {
     if (!list || !userData || !canChangeList || !userGroup) return;
-
     runListAction("leave", () =>
       leaveVolleyList({
         listId: list.id,
@@ -254,13 +329,20 @@ export default function MatchList() {
   }
 
   async function handleOpenProfile(person) {
-    setSelectedPerson(person);
+    const userId = person.userId || person.id;
+    if (!userId) return;
 
-    if (profilesById[person.id]) return;
+    setSelectedPerson({
+      id: userId,
+      name: person.displayName || person.name,
+      username: person.username,
+    });
+
+    if (profilesById[userId]) return;
 
     try {
       setIsLoadingProfile(true);
-      const nextProfilesById = await getPublicProfileBundles([person.id]);
+      const nextProfilesById = await getPublicProfileBundles([userId]);
       setProfilesById((current) => ({
         ...current,
         ...nextProfilesById,
@@ -275,7 +357,7 @@ export default function MatchList() {
   if (isLoading) {
     return (
       <main className="flex min-h-screen items-center justify-center px-5 pb-28 pt-6">
-        <span className="h-6 w-6 animate-spin rounded-full border-2 border-white/10 border-t-app-primary shadow-[0_0_18px_rgba(255,183,3,0.35)]" />
+        <OrbitLoader />
       </main>
     );
   }
@@ -291,7 +373,11 @@ export default function MatchList() {
               </h1>
               <p className="mt-0.5 truncate text-xs font-semibold text-[#9aa89f]">
                 {list
-                  ? `${formatDate(list.date)} · ${totalConfirmed}/${totalLimit} confirmados`
+                  ? `${formatDate(list.date)} · ${
+                      isInProgress
+                        ? `${list.summary?.totalPlayers || 0} na quadra`
+                        : `${totalConfirmed}/${totalLimit} confirmados`
+                    }`
                   : "Aguardando abertura da lista"}
               </p>
             </div>
@@ -311,22 +397,6 @@ export default function MatchList() {
               </div>
             </div>
           </div>
-
-          {list && (
-            <div className="mt-3">
-              <div className="h-2 overflow-hidden rounded-full bg-white/[0.07]">
-                <div
-                  className="h-full rounded-full bg-app-primary transition-all"
-                  style={{
-                    width: `${Math.min(
-                      100,
-                      (totalConfirmed / totalLimit) * 100,
-                    )}%`,
-                  }}
-                />
-              </div>
-            </div>
-          )}
         </header>
 
         {errorMessage && (
@@ -335,31 +405,11 @@ export default function MatchList() {
           </p>
         )}
 
-        {!list && (
-          <EmptyListState />
-        )}
+        {!list && <EmptyListState />}
 
-        {list && (
+        {list && isListOpen && (
           <>
-            {!isListOpen && (
-              <div className="rounded-[1.4rem] border border-white/10 bg-white/[0.04] p-4">
-                <p className="text-sm font-bold text-[#9aa89f]">
-                  A pelada ja foi iniciada. Agora a lista fica travada para o
-                  controle da quadra.
-                </p>
-              </div>
-            )}
-
-            {!isMember && !isAdmin && (
-              <div className="rounded-[1.4rem] border border-white/10 bg-white/[0.04] p-4">
-                <p className="text-sm font-bold text-[#9aa89f]">
-                  Convidados podem acompanhar a lista. Para entrar sozinho, tem
-                  que virar membro da casa.
-                </p>
-              </div>
-            )}
-
-            <ListGroup
+            <PresenceGroup
               title="Levantadores"
               icon={Crown}
               limit={list.settersLimit}
@@ -378,7 +428,7 @@ export default function MatchList() {
               }
             />
 
-            <ListGroup
+            <PresenceGroup
               title="Jogadores"
               icon={Volleyball}
               limit={list.playersLimit}
@@ -398,42 +448,93 @@ export default function MatchList() {
             />
 
             <section className="rounded-[1.7rem] border border-white/10 bg-[#17231f]/75 p-4 shadow-[0_14px_40px_rgba(0,0,0,0.24)] backdrop-blur-2xl">
-              <div className="mb-3 flex items-center gap-2">
-                <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-app-primary/15 text-app-primary">
-                  <UserPlus size={18} />
-                </div>
+              <div className="flex items-center gap-2">
+                <UserPlus size={17} className="text-app-primary" />
+                <p className="text-sm font-black text-[#fffaf0]">
+                  A lista da quadra sera montada pelo admin por ordem de chegada.
+                </p>
+              </div>
+            </section>
+          </>
+        )}
 
-                <div>
-                  <h2 className="text-sm font-black text-[#fffaf0]">
-                    Convidados
-                  </h2>
-                  <p className="text-xs text-[#9aa89f]">
-                    Pedido preparado para o proximo fluxo
+        {list && isInProgress && (
+          <>
+            <section className="rounded-[1.7rem] border border-white/10 bg-[#17231f]/75 p-4 shadow-[0_14px_40px_rgba(0,0,0,0.24)] backdrop-blur-2xl">
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="rounded-2xl bg-white/[0.04] p-2">
+                  <p className="text-lg font-black text-[#fffaf0]">
+                    {list.summary?.totalGames || 0}
+                  </p>
+                  <p className="text-[10px] font-bold text-[#9aa89f]">jogos</p>
+                </div>
+                <div className="rounded-2xl bg-white/[0.04] p-2">
+                  <p className="text-lg font-black text-[#fffaf0]">
+                    {list.summary?.totalPlayers || 0}
+                  </p>
+                  <p className="text-[10px] font-bold text-[#9aa89f]">
+                    presentes
+                  </p>
+                </div>
+                <div className="rounded-2xl bg-white/[0.04] p-2">
+                  <p className="text-lg font-black text-[#fffaf0]">
+                    {list.summary?.totalWomen || 0}
+                  </p>
+                  <p className="text-[10px] font-bold text-[#9aa89f]">
+                    <Venus size={10} className="inline" /> mulheres
                   </p>
                 </div>
               </div>
-
-              <button
-                type="button"
-                disabled
-                className="w-full cursor-not-allowed rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-black text-[#66736b]"
-              >
-                Pedir vaga para convidado
-              </button>
             </section>
 
-            {!isAdmin && (
-              <section className="rounded-[1.7rem] border border-white/10 bg-white/[0.04] p-4">
-                <div className="flex items-center gap-2">
-                  <Users size={17} className="text-app-primary" />
-                  <p className="text-sm font-black text-[#fffaf0]">
-                    Resumo da pelada
-                  </p>
-                </div>
+            {list.returnTeam && (
+              <LiveTeam
+                title="Volta"
+                team={list.returnTeam}
+                playersByEntryId={playersByEntryId}
+                profilesById={profilesById}
+                onOpenProfile={handleOpenProfile}
+              />
+            )}
 
-                <p className="mt-2 text-sm leading-relaxed text-[#9aa89f]">
-                  Escolha uma vaga, acompanhe a lista e chegue pronto. O resto a
-                  quadra resolve.
+            <section className="rounded-[1.8rem] border border-app-primary/20 bg-[#17231f]/80 p-3 shadow-[0_18px_52px_rgba(0,0,0,0.28)] backdrop-blur-2xl">
+              <div className="mb-3 flex items-center gap-2 px-1">
+                <Volleyball size={18} className="text-app-primary" />
+                <h2 className="text-sm font-black text-[#fffaf0]">
+                  Em quadra
+                </h2>
+              </div>
+
+              <div className="space-y-3">
+                {teams.slice(0, 2).map((team, index) => (
+                  <LiveTeam
+                    key={team.id}
+                    title={`Time ${index + 1}`}
+                    team={team}
+                    playersByEntryId={playersByEntryId}
+                    profilesById={profilesById}
+                    onOpenProfile={handleOpenProfile}
+                  />
+                ))}
+              </div>
+            </section>
+
+            {teams.slice(2).map((team, index) => (
+              <LiveTeam
+                key={team.id}
+                title={`${index + 1}º Proxima`}
+                team={team}
+                playersByEntryId={playersByEntryId}
+                profilesById={profilesById}
+                onOpenProfile={handleOpenProfile}
+              />
+            ))}
+
+            {!teams.length && (
+              <section className="rounded-[1.7rem] border border-dashed border-white/10 bg-white/[0.04] p-5 text-center">
+                <Users className="mx-auto mb-2 text-app-primary" size={22} />
+                <p className="text-sm font-black text-[#fffaf0]">
+                  Aguardando o admin montar os times.
                 </p>
               </section>
             )}
@@ -449,7 +550,6 @@ export default function MatchList() {
           onClose={() => setSelectedPerson(null)}
         />
       )}
-
     </main>
   );
 }

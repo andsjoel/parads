@@ -1,10 +1,10 @@
 /* eslint-disable react/prop-types */
-import { Loader2, X } from "lucide-react";
+import { X } from "lucide-react";
 
-import ProfileAchievements from "./ProfileAchievements";
 import ProfileHeader from "./ProfileHeader";
 import ProfileStats from "./ProfileStats";
 import { getProfileAssetUrls } from "../../utils/profileAssets";
+import OrbitLoader from "../OrbitLoader";
 
 function getDisplayName(person, bundle) {
   return (
@@ -23,7 +23,7 @@ export function PlayerMiniCard({ person, profileBundle, onOpen, onRemove }) {
   const displayName = getDisplayName(person, profileBundle);
 
   return (
-    <div className="group relative min-w-0 flex-1 overflow-visible rounded-2xl border border-white/10 bg-[#14211d] shadow-[0_10px_26px_rgba(0,0,0,0.18)] transition hover:border-app-primary/30">
+    <div className="group relative min-w-0 flex-1 overflow-visible border-b border-white/10 bg-transparent transition hover:border-[#5bc0ff]/40">
       {backgroundUrl && (
         <img
           src={backgroundUrl}
@@ -32,7 +32,7 @@ export function PlayerMiniCard({ person, profileBundle, onOpen, onRemove }) {
         />
       )}
 
-      <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-[#14211d] via-[#14211d]/82 to-transparent" />
+      <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-[#210019] via-[#210019]/82 to-transparent" />
       <div className="absolute inset-0 rounded-2xl bg-gradient-to-l from-black/15 via-transparent to-black/20" />
 
       <button
@@ -90,7 +90,7 @@ export function ProfileStickerModal({
 
   return (
     <div className="fixed inset-0 z-[95] flex items-end justify-center bg-black/75 px-4 pb-4 pt-8 backdrop-blur-sm">
-      <article className="profile-sticker-card relative max-h-[92vh] w-full max-w-[430px] overflow-hidden rounded-[2rem] border border-app-primary/25 bg-[#111c18]/92 p-3 shadow-[0_24px_80px_rgba(0,0,0,0.58)]">
+      <article className="profile-sticker-card relative max-h-[92vh] w-full max-w-[430px] overflow-hidden border border-[#5bc0ff]/20 bg-[#210019]/94 p-3 shadow-[0_24px_80px_rgba(0,0,0,0.58)]">
         {backgroundUrl && (
           <img
             src={backgroundUrl}
@@ -99,17 +99,17 @@ export function ProfileStickerModal({
           />
         )}
 
-        <div className="absolute inset-0 bg-gradient-to-b from-[#111c18]/35 via-[#111c18]/72 to-[#111c18]/96" />
+        <div className="absolute inset-0 bg-gradient-to-b from-[#210019]/35 via-[#210019]/72 to-[#210019]/96" />
         <div className="profile-sticker-shine pointer-events-none absolute -inset-y-10 left-0 w-[78%]" />
-        <div className="absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-app-primary/70 to-transparent" />
+        <div className="absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-[#5bc0ff]/70 to-transparent" />
 
         {isLoading ? (
           <div className="relative flex h-[420px] flex-col items-center justify-center gap-3 text-app-primary">
-            <Loader2 size={28} className="animate-spin" />
+            <OrbitLoader size={32} />
           </div>
         ) : user ? (
           <div className="relative max-h-[calc(92vh-1.5rem)] overflow-y-auto pr-1">
-            <div className="rounded-[1.9rem] border border-white/10 bg-white/[0.035] p-2 shadow-inner">
+            <div className="overflow-hidden rounded-[1.9rem] border border-white/10 bg-white/[0.035] p-2 shadow-inner">
               <ProfileHeader user={user} readOnly onClose={onClose} />
             </div>
 
@@ -117,9 +117,6 @@ export function ProfileStickerModal({
               <ProfileStats stats={profileBundle.stats} />
             </div>
 
-            <div className="mt-3">
-              <ProfileAchievements inventory={profileBundle.inventory} />
-            </div>
           </div>
         ) : (
           <div className="relative flex min-h-[260px] flex-col items-center justify-center px-6 text-center">

@@ -1,9 +1,8 @@
 /* eslint-disable react/prop-types */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Check, Edit3, Image, Sparkles, UserRound, X } from "lucide-react";
 
 import { updateUserProfile } from "../../services/profileService";
-import { unlockAchievement } from "../../services/achievementService";
 
 import { profileBackgroundsCatalog } from "../../data/profileBackgroundsCatalog";
 import { profilePicsCatalog } from "../../data/profilePicsCatalog";
@@ -128,6 +127,17 @@ export default function ProfileHeader({
     setIsEditing(true);
   }
 
+  useEffect(() => {
+    if (!isEditing && !pickerType) return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isEditing, pickerType]);
+
   function cancelEditing() {
     setPickerType(null);
     setIsEditing(false);
@@ -147,13 +157,6 @@ export default function ProfileHeader({
       };
 
       await updateUserProfile(user.id, nextProfile);
-
-      const previousStatus = profile.statusMessage?.trim() || "";
-      const nextStatus = nextProfile.statusMessage?.trim() || "";
-
-      if (!previousStatus && nextStatus) {
-        await unlockAchievement(user.id, "first_status");
-      }
 
       onUpdated?.({
         ...user,
@@ -213,25 +216,26 @@ export default function ProfileHeader({
   return (
     <>
       <section
-        className={`
-          overflow-hidden rounded-[2rem] border border-white/10
-          bg-[#17231f]/75 shadow-[0_18px_50px_rgba(0,0,0,0.28)]
-          backdrop-blur-2xl transition-all duration-500
-          ${isEditing ? "scale-[1.01]" : ""}
-        `}
+        className={
+          isEditing
+            ? "fixed inset-0 z-[80] flex items-center justify-center bg-black/65 px-5 py-5 backdrop-blur-sm"
+            : `profile-identity overflow-hidden transition-all duration-500 ${readOnly ? "rounded-[1.65rem] border border-white/10" : ""}`
+        }
+        aria-modal={isEditing ? "true" : undefined}
+        role={isEditing ? "dialog" : undefined}
       >
         {!isEditing ? (
           <>
-            <div className="relative h-40 overflow-hidden">
+            <div className="relative h-56 overflow-hidden">
               <img
                 src={backgroundUrl}
                 alt=""
                 className="h-full w-full object-cover"
               />
 
-              <div className="absolute inset-0 bg-gradient-to-b from-black/5 via-black/10 to-[#17231f]" />
+              <div className="absolute inset-0 bg-gradient-to-b from-black/5 via-[#210019]/20 to-[#210019]" />
 
-              <div className="absolute left-4 top-4 rounded-full border border-white/10 bg-black/25 px-3 py-1 text-xs font-black text-white backdrop-blur-xl">
+              <div className="profile-level-badge absolute left-5 top-5 px-3 py-1.5 text-xs font-semibold text-white/70 backdrop-blur-xl">
                 Nv. {user?.progression?.level || 1}
               </div>
 
@@ -240,7 +244,7 @@ export default function ProfileHeader({
                   <button
                     type="button"
                     onClick={onClose}
-                    className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/25 text-white backdrop-blur-xl transition active:scale-95"
+                    className="profile-icon-action absolute right-4 top-4 flex h-10 w-10 items-center justify-center bg-black/30 text-white backdrop-blur-xl"
                   >
                     <X size={16} />
                   </button>
@@ -249,16 +253,16 @@ export default function ProfileHeader({
                 <button
                   type="button"
                   onClick={startEditing}
-                  className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/25 text-white backdrop-blur-xl transition active:scale-95"
+                  className="profile-icon-action absolute right-4 top-4 flex h-10 w-10 items-center justify-center bg-black/30 text-white backdrop-blur-xl"
                 >
                   <Edit3 size={16} />
                 </button>
               )}
             </div>
 
-            <div className="relative px-4 pb-5">
-              <div className="-mt-10 mb-4 flex items-end gap-3">
-                <div className="relative h-[82px] w-[82px] shrink-0">
+            <div className="relative px-6 pb-5">
+              <div className="-mt-14 mb-3 flex items-end gap-4">
+                <div className="profile-avatar relative h-[96px] w-[96px] shrink-0">
                   <img
                     src={profilePicUrl}
                     alt={displayName}
@@ -278,18 +282,18 @@ export default function ProfileHeader({
                   )}
                 </div>
 
-                <div className="min-w-0 pb-2 pl-3">
-                  <h2 className="truncate text-[1.35rem] font-black text-[#fffaf0] drop-shadow">
+                <div className="min-w-0 flex-1 pb-1">
+                  <h2 className="login-username-value break-words text-[clamp(2.35rem,10vw,3.75rem)] leading-[0.92] text-[#fffaf0] drop-shadow">
                     {displayName}
                   </h2>
 
-                  <p className="mt-0.5 truncate text-sm font-semibold text-white/65">
+                  <p className="mt-2 break-all text-sm font-normal text-[#5bc0ff]/75">
                     @{user?.username || "player"}
                   </p>
                 </div>
               </div>
 
-              <p className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm leading-relaxed text-[#fffaf0]">
+              <p className="profile-status flex items-center gap-3 px-4 py-2 text-sm leading-relaxed text-white/58">
                 <span className="flex shrink-0 items-center justify-center text-[1.15rem] leading-none">
                   {selectedStatusIcon}
                 </span>
@@ -299,15 +303,12 @@ export default function ProfileHeader({
             </div>
           </>
         ) : (
-          <div className="p-4">
+          <div className="max-h-[calc(100vh-2.5rem)] w-full max-w-[420px] overflow-y-auto border border-white/10 bg-[#210019]/95 p-5 shadow-[0_20px_60px_rgba(0,0,0,0.48)] backdrop-blur-3xl">
             <div className="mb-4 flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-black text-[#fffaf0]">
                   Editar perfil
                 </h2>
-                <p className="mt-1 text-xs text-app-muted">
-                  Personalize sua identidade de jogador
-                </p>
               </div>
 
               <button
@@ -353,7 +354,7 @@ export default function ProfileHeader({
               />
 
               <div>
-                <label className="mb-1 block text-xs font-bold text-app-muted">
+                <label className="mb-1 block text-xs font-semibold text-white/40">
                   Nome de exibição
                 </label>
                 <input
@@ -367,7 +368,7 @@ export default function ProfileHeader({
                       ).slice(0, 15),
                     }))
                   }
-                  className="h-11 w-full rounded-2xl border border-white/10 bg-white/[0.06] px-4 text-sm font-bold text-white outline-none focus:border-app-primary/40 focus:ring-4 focus:ring-app-primary/10"
+                  className="login-username-value h-14 w-full border-x-0 border-b border-t-0 border-white/15 bg-transparent px-1 text-4xl leading-none text-white outline-none focus:border-[#5bc0ff]/65"
                 />
               </div>
 
@@ -379,7 +380,7 @@ export default function ProfileHeader({
               />
 
               <div>
-                <label className="mb-1 block text-xs font-bold text-app-muted">
+                <label className="mb-1 block text-xs font-semibold text-white/40">
                   Status
                 </label>
 
@@ -393,13 +394,13 @@ export default function ProfileHeader({
                     }))
                   }
                   placeholder="Pronto para jogar"
-                  className="h-11 w-full rounded-2xl border border-white/10 bg-white/[0.06] px-4 text-sm text-white outline-none placeholder:text-app-muted focus:border-app-primary/40 focus:ring-4 focus:ring-app-primary/10"
+                  className="h-11 w-full border-x-0 border-b border-t-0 border-white/15 bg-transparent px-1 text-sm text-white outline-none placeholder:text-white/25 focus:border-[#5bc0ff]/65"
                 />
               </div>
 
               <EditRow
                 icon={Sparkles}
-                label="Ícone do status"
+                label="Icon mode"
                 value={draftProfile.selectedStatusIcon}
                 onClick={() => setPickerType("statusIcon")}
               />
@@ -408,7 +409,7 @@ export default function ProfileHeader({
                 <button
                   type="button"
                   onClick={cancelEditing}
-                  className="h-11 rounded-full border border-white/10 bg-white/[0.06] text-sm font-black text-white active:scale-[0.98]"
+                  className="register-outline-action text-sm font-semibold"
                 >
                   Cancelar
                 </button>
@@ -417,7 +418,7 @@ export default function ProfileHeader({
                   type="button"
                   onClick={handleSave}
                   disabled={isSaving}
-                  className="h-11 rounded-full bg-app-primary text-sm font-black text-[#1b1300] shadow-[0_10px_30px_rgba(255,183,3,0.28)] active:scale-[0.98] disabled:opacity-50"
+                  className="register-paper-action text-sm font-semibold disabled:opacity-50"
                 >
                   {isSaving ? "Salvando..." : "Salvar"}
                 </button>
@@ -465,14 +466,14 @@ function EditRow({ icon: Icon, label, value, onClick, disabled }) {
       disabled={disabled}
       onClick={onClick}
       className={`
-        flex h-12 items-center justify-between rounded-2xl border border-white/10
-        bg-white/[0.04] px-4 text-left transition active:scale-[0.98]
-        ${disabled ? "opacity-60" : "hover:border-app-primary/30"}
+        flex h-12 items-center justify-between border-b border-white/10
+        bg-transparent px-1 text-left transition active:scale-[0.98]
+        ${disabled ? "opacity-50" : "hover:border-[#5bc0ff]/45"}
       `}
     >
       <span className="flex items-center gap-3">
-        <Icon size={17} className="text-app-primary" />
-        <span className="text-xs font-bold text-app-muted">{label}</span>
+        <Icon size={17} className="text-[#5bc0ff]/75" />
+        <span className="text-xs font-semibold text-white/40">{label}</span>
       </span>
 
       <span className="max-w-[150px] truncate text-sm font-black text-white">
@@ -543,13 +544,13 @@ function AssetPickerModal({
 
   return (
     <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/60 px-5 pb-5 backdrop-blur-sm">
-      <div className="max-h-[82vh] w-full max-w-[420px] overflow-hidden rounded-[1.8rem] border border-white/10 bg-[#13201c]/95 p-5 shadow-[0_20px_60px_rgba(0,0,0,0.45)] backdrop-blur-3xl">
+      <div className="max-h-[82vh] w-full max-w-[420px] overflow-hidden border border-white/10 bg-[#210019]/95 p-5 shadow-[0_20px_60px_rgba(0,0,0,0.45)] backdrop-blur-3xl">
         <div className="mb-4 flex items-center justify-between">
           <div>
             <h2 className="text-lg font-black text-white">{title}</h2>
 
             {!isStatusIcon && (
-              <p className="mt-1 text-xs font-semibold text-app-muted">
+              <p className="mt-1 text-xs font-semibold text-white/35">
                 {filteredItems.length} opções disponíveis
               </p>
             )}
@@ -569,7 +570,7 @@ function AssetPickerModal({
             <select
               value={selectedTheme}
               onChange={(event) => setSelectedTheme(event.target.value)}
-              className="h-11 rounded-full border border-white/10 bg-[#16231f] px-4 text-sm font-bold text-white outline-none focus:border-app-primary/40"
+              className="h-11 border border-white/10 bg-[#210019] px-4 text-sm font-semibold text-white outline-none focus:border-[#5bc0ff]/45"
             >
               <option value="all">Todos os temas</option>
 
@@ -592,7 +593,7 @@ function AssetPickerModal({
               <span
                 className={`
                   flex h-6 w-11 items-center rounded-full p-1 transition
-                  ${showOnlyOwned ? "bg-app-primary" : "bg-white/10"}
+                  ${showOnlyOwned ? "bg-[#5bc0ff]" : "bg-white/10"}
                 `}
               >
                 <span
@@ -617,7 +618,7 @@ function AssetPickerModal({
                   flex h-16 items-center justify-center rounded-2xl border text-2xl transition active:scale-95
                   ${
                     selectedId === icon
-                      ? "border-app-primary bg-app-primary/15"
+                      ? "border-[#5bc0ff] bg-[#5bc0ff]/15"
                       : "border-white/10 bg-white/[0.05]"
                   }
                 `}
@@ -647,7 +648,7 @@ function AssetPickerModal({
                     onClick={() => onSelect(type, item.id)}
                     className={`
                       relative overflow-hidden rounded-2xl border transition active:scale-95
-                      ${selected ? "border-app-primary" : "border-white/10"}
+                      ${selected ? "border-[#5bc0ff]" : "border-white/10"}
                       ${!unlocked ? "opacity-35 grayscale" : ""}
                       h-24
                     `}
@@ -663,7 +664,7 @@ function AssetPickerModal({
                     </div>
 
                     {selected && (
-                      <div className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-app-primary text-[#1b1300]">
+                      <div className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-[#5bc0ff] text-[#210019]">
                         <Check size={14} strokeWidth={3} />
                       </div>
                     )}
@@ -679,7 +680,7 @@ function AssetPickerModal({
             </div>
 
             {!filteredItems.length && (
-              <p className="py-8 text-center text-sm font-semibold text-app-muted">
+              <p className="py-8 text-center text-sm font-semibold text-white/35">
                 Nenhuma opção encontrada nesse filtro.
               </p>
             )}

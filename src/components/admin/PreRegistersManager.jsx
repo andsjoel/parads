@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
   CheckCircle,
+  Copy,
   Mars,
   Plus,
   Search,
@@ -17,6 +18,7 @@ import {
 } from "../../services/preRegisterService";
 
 import ConfirmDeleteModal from "../../components/ConfirmDeleteModal";
+import OrbitLoader from "../../components/OrbitLoader";
 
 import { deleteUserCascadeByPreRegister } from "../../services/userService";
 
@@ -64,6 +66,7 @@ export default function PreRegistersManager() {
   const [role, setRole] = useState("member");
   const [sex, setSex] = useState("male");
   const [isSaving, setIsSaving] = useState(false);
+  const [createdInvite, setCreatedInvite] = useState(null);
 
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false); 
@@ -114,7 +117,7 @@ export default function PreRegistersManager() {
     try {
       setIsSaving(true);
 
-      await createPreRegister({
+      const created = await createPreRegister({
         fullName,
         phone: phoneNumbers,
         type: "member",
@@ -127,6 +130,7 @@ export default function PreRegistersManager() {
       setRole("member");
       setSex("male");
       setShowModal(false);
+      setCreatedInvite(created);
 
       await loadPreRegisters();
     } finally {
@@ -219,7 +223,7 @@ export default function PreRegistersManager() {
 
         {isLoading ? (
           <div className="mt-8 flex justify-center">
-            <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/20 border-t-app-primary" />
+            <OrbitLoader size={32} />
           </div>
         ) : (
           <div className="flex flex-col gap-3">
@@ -393,6 +397,35 @@ export default function PreRegistersManager() {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {createdInvite && (
+        <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/60 px-5 pb-5 backdrop-blur-sm">
+          <div className="w-full max-w-[420px] rounded-[1.8rem] border border-white/10 bg-[#13201c]/95 p-5 text-center shadow-[0_20px_60px_rgba(0,0,0,0.45)]">
+            <p className="text-sm text-slate-400">Codigo de primeiro acesso</p>
+            <p className="mt-3 font-mono text-4xl tracking-[0.25em] text-app-primary">
+              {createdInvite.temporaryCode}
+            </p>
+            <p className="mt-3 text-sm text-slate-500">
+              Envie este codigo para {createdInvite.fullName}. Ele nao sera exibido novamente.
+            </p>
+            <button
+              type="button"
+              onClick={() => navigator.clipboard.writeText(createdInvite.temporaryCode)}
+              className="mt-5 flex h-12 w-full items-center justify-center gap-2 rounded-full bg-app-primary text-sm font-black text-slate-950"
+            >
+              <Copy size={17} />
+              Copiar codigo
+            </button>
+            <button
+              type="button"
+              onClick={() => setCreatedInvite(null)}
+              className="mt-3 h-10 text-sm text-slate-400"
+            >
+              Fechar
+            </button>
+          </div>
         </div>
       )}
 

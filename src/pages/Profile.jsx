@@ -1,82 +1,35 @@
 import { useEffect, useState } from "react";
-import { doc, getDoc } from "firebase/firestore";
-import { onAuthStateChanged } from "firebase/auth";
-
-import { auth, db } from "../firebase/firebase";
+import { useAuth } from "../contexts/AuthContext";
+import OrbitLoader from "../components/OrbitLoader";
 import ProfileHeader from "../components/profile/ProfileHeader";
 import ProfileStats from "../components/profile/ProfileStats";
-import ProfileAchievements from "../components/profile/ProfileAchievements";
 
 export default function Profile() {
-  const [userData, setUserData] = useState(null);
-  const [inventory, setInventory] = useState(null);
-  const [stats, setStats] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  async function loadProfile(user) {
-    const userRef = doc(db, "users", user.uid);
-    const inventoryRef = doc(db, "user_inventory", user.uid);
-    const statsRef = doc(db, "user_stats", user.uid);
-
-    const [userSnap, inventorySnap, statsSnap] = await Promise.all([
-      getDoc(userRef),
-      getDoc(inventoryRef),
-      getDoc(statsRef),
-    ]);
-
-    if (userSnap.exists()) {
-      setUserData({
-        id: userSnap.id,
-        ...userSnap.data(),
-      });
-    }
-
-    if (inventorySnap.exists()) {
-      setInventory(inventorySnap.data());
-    }
-
-    if (statsSnap.exists()) {
-      setStats(statsSnap.data());
-    }
-  }
+  const { userData: authUserData, sessionData, loadingAuth } = useAuth();
+  const [userData, setUserData] = useState(authUserData);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (!user) {
-        setUserData(null);
-        setInventory(null);
-        setStats(null);
-        setIsLoading(false);
-        return;
-      }
+    setUserData(authUserData);
+  }, [authUserData]);
 
-      await loadProfile(user);
-      setIsLoading(false);
-    });
-
-    return unsubscribe;
-  }, []);
-
-  if (isLoading) {
+  if (loadingAuth || !userData) {
     return (
       <main className="flex min-h-screen items-center justify-center px-5 pb-28 pt-6">
-        <span className="h-6 w-6 animate-spin rounded-full border-2 border-white/10 border-t-app-primary shadow-[0_0_18px_rgba(255,183,3,0.35)]" />
+        <OrbitLoader />
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen px-5 pb-28 pt-6 text-white">
-      <section className="mx-auto flex w-full max-w-[420px] flex-col gap-4">
+    <main className="profile-page min-h-screen pb-28 text-white">
+      <section className="mx-auto flex w-full max-w-[520px] flex-col">
         <ProfileHeader
           user={userData}
-          inventory={inventory}
+          inventory={sessionData?.inventory}
           onUpdated={setUserData}
         />
 
-        <ProfileStats stats={stats} />
-
-        <ProfileAchievements inventory={inventory} />
+        <ProfileStats stats={sessionData?.stats} />
       </section>
     </main>
   );
