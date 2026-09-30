@@ -6,6 +6,7 @@ import {
 } from "firebase/firestore";
 
 import { db } from "../firebase/firebase";
+import { INITIAL_COIN_BALANCE } from "../data/economy";
 
 export async function isUsernameAvailable(username) {
   const cleanUsername = username.trim().toLowerCase();
@@ -83,16 +84,17 @@ export async function createUserBaseData({ uid, preRegister, username, authEmail
     profile: {
       displayName: preRegister.fullName,
       statusMessage: "",
-      selectedBackgroundId: "bg-default-1",
-      selectedProfilePicId: "pic-default-1",
+      selectedBackgroundId: "bg-default",
+      selectedProfilePicId: "pic-default",
       selectedProfilePicBorderId: null,
+      selectedDisplayCardId: "display-card-orange",
       selectedStatusIcon: "✦",
     },
 
     progression: {
       level: 1,
       xp: 0,
-      coins: 0,
+      coins: INITIAL_COIN_BALANCE,
     },
 
     createdAt: serverTimestamp(),
@@ -118,9 +120,10 @@ export async function createUserBaseData({ uid, preRegister, username, authEmail
   });
 
   batch.set(inventoryRef, {
-    backgrounds: ["bg-default-1", "bg-default-2", "bg-default-3"],
-    profilePics: ["pic-default-1", "pic-default-2", "pic-default-3"],
-    profilePicBorders: ["border-pic-default-1", "border-pic-default-2"],
+    backgrounds: [],
+    profilePics: [],
+    profilePicBorders: [],
+    displayCards: [],
 
     achievements: [
       {

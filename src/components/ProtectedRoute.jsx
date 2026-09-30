@@ -1,7 +1,7 @@
 /* eslint-disable react/prop-types */
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-import OrbitLoader from "./OrbitLoader";
+import generalBackground from "../assets/app-backgrounds/bg-geral.png";
 
 export default function ProtectedRoute({ children }) {
   const { loadingAuth, isAuthenticated } = useAuth();
@@ -9,12 +9,12 @@ export default function ProtectedRoute({ children }) {
   if (loadingAuth) {
     return (
       <main
-        className="
-          flex min-h-screen items-center justify-center
-          bg-[linear-gradient(220deg,#1d0312_0%,#2b1102_60%,#000000_100%)]
-        "
+        className="auth-loading-page flex min-h-screen items-center justify-center"
+        style={{ backgroundImage: `url(${generalBackground})` }}
       >
-        <OrbitLoader />
+        <span className="register-idv-loader" role="status" aria-label="Carregando">
+          <span />
+        </span>
       </main>
     );
   }

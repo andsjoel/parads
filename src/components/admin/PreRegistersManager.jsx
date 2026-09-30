@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+/* eslint-disable react/prop-types */
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
-  CheckCircle,
+  Check,
+  ChevronDown,
   Copy,
   Mars,
   Plus,
@@ -19,6 +21,7 @@ import {
 
 import ConfirmDeleteModal from "../../components/ConfirmDeleteModal";
 import OrbitLoader from "../../components/OrbitLoader";
+import generalBackground from "../../assets/app-backgrounds/bg-geral.png";
 
 import { deleteUserCascadeByPreRegister } from "../../services/userService";
 
@@ -47,10 +50,72 @@ const roleOptions = [
   { label: "Admin", value: "admin" },
 ];
 
+const typeFilterOptions = [
+  { label: "Todos", value: "all" },
+  ...roleOptions.map((option) => ({ ...option, label: `${option.label}s` })),
+];
+
+const statusFilterOptions = [
+  { label: "Status", value: "all" },
+  { label: "Cadastrados", value: "claimed" },
+  { label: "Pendentes", value: "pending" },
+];
+
 const sexOptions = [
   { label: "Homem", value: "male", Icon: Mars },
   { label: "Mulher", value: "female", Icon: Venus },
 ];
+
+function IdvSelect({ value, onChange, options, ariaLabel }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const rootRef = useRef(null);
+  const selected = options.find((option) => option.value === value) || options[0];
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    function closeMenu(event) {
+      if (!rootRef.current?.contains(event.target)) setIsOpen(false);
+    }
+    document.addEventListener("pointerdown", closeMenu);
+    return () => document.removeEventListener("pointerdown", closeMenu);
+  }, [isOpen]);
+
+  return (
+    <div ref={rootRef} className="admin-select relative">
+      <button
+        type="button"
+        aria-label={ariaLabel}
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+        onClick={() => setIsOpen((current) => !current)}
+        className={`admin-select-trigger ${isOpen ? "admin-select-trigger--open" : ""}`}
+      >
+        <span>{selected.label}</span>
+        <ChevronDown size={16} className={`transition-transform ${isOpen ? "rotate-180" : ""}`} />
+      </button>
+      {isOpen && (
+        <div className="admin-select-menu" role="listbox">
+          {options.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              role="option"
+              aria-selected={option.value === value}
+              onClick={() => {
+                onChange(option.value);
+                setIsOpen(false);
+              }}
+              className={`admin-select-option ${option.value === value ? "admin-select-option--selected" : ""}`}
+            >
+              <span>{option.label}</span>
+              {option.value === value && <Check size={14} />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function PreRegistersManager() {
   const [preRegisters, setPreRegisters] = useState([]);
@@ -67,6 +132,7 @@ export default function PreRegistersManager() {
   const [sex, setSex] = useState("male");
   const [isSaving, setIsSaving] = useState(false);
   const [createdInvite, setCreatedInvite] = useState(null);
+  const [expandedInviteId, setExpandedInviteId] = useState(null);
 
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false); 
@@ -157,36 +223,31 @@ export default function PreRegistersManager() {
   }
 
   return (
-    <main className="min-h-screen px-5 pb-28 pt-6 text-white">
+    <main className="admin-page min-h-screen px-5 pb-28 pt-6 text-white" style={{ backgroundImage: `url(${generalBackground})` }}>
       <section className="mx-auto flex w-full max-w-[420px] flex-col">
         <div className="mb-5 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link
               to="/admin"
-              className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-slate-400"
+              className="profile-modal-close flex h-10 w-10 items-center justify-center text-white/70"
             >
               <ArrowLeft size={18} />
             </Link>
 
-            <div>
-              <h1 className="text-xl font-black">Convites</h1>
-              <p className="text-sm text-app-muted">
-                Pessoas esperando entrar no time
-              </p>
-            </div>
+            <h1 className="text-xl font-black">Convites</h1>
           </div>
 
           <button
             type="button"
             onClick={() => setShowModal(true)}
-            className="flex h-11 w-11 items-center justify-center rounded-full bg-app-primary text-[#1b1300] shadow-[0_0_22px_rgba(255,183,3,0.38)] active:scale-95"
+            className="admin-primary-action flex h-11 w-11 items-center justify-center active:scale-95"
           >
             <Plus size={20} />
           </button>
         </div>
 
-        <div className="mb-4 rounded-[1.5rem] border border-white/10 bg-[#17231f]/70 p-3 shadow-[0_14px_35px_rgba(0,0,0,0.22)] backdrop-blur-2xl">
-          <div className="flex h-11 items-center gap-2 rounded-full border border-white/10 bg-white/[0.05] px-4">
+        <div className="admin-panel mb-4 p-3">
+          <div className="admin-search flex h-11 items-center gap-2 px-4">
             <Search size={17} className="text-slate-500" />
 
             <input
@@ -198,26 +259,9 @@ export default function PreRegistersManager() {
           </div>
 
           <div className="mt-3 grid grid-cols-2 gap-2">
-            <select
-              value={typeFilter}
-              onChange={(event) => setTypeFilter(event.target.value)}
-              className="h-10 rounded-full border border-white/10 bg-[#16231f] px-3 text-sm text-stone-300 outline-none focus:border-app-primary/40"
-            >
-              <option value="all">Todos</option>
-              <option value="member">Membros</option>
-              <option value="guest">Convidados</option>
-              <option value="admin">Admins</option>
-            </select>
+            <IdvSelect value={typeFilter} onChange={setTypeFilter} options={typeFilterOptions} ariaLabel="Filtrar por tipo" />
 
-            <select
-              value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value)}
-              className="h-10 rounded-full border border-white/10 bg-[#16231f] px-3 text-sm text-stone-300 outline-none focus:border-app-primary/40"
-            >
-              <option value="all">Status</option>
-              <option value="claimed">Cadastrados</option>
-              <option value="pending">Pendentes</option>
-            </select>
+            <IdvSelect value={statusFilter} onChange={setStatusFilter} options={statusFilterOptions} ariaLabel="Filtrar por status" />
           </div>
         </div>
 
@@ -226,65 +270,50 @@ export default function PreRegistersManager() {
             <OrbitLoader size={32} />
           </div>
         ) : (
-          <div className="flex flex-col gap-3">
-            {filteredPreRegisters.map((item) => (
-              <div
-                key={item.id}
-                className="rounded-[1.5rem] border border-white/10 bg-[#17231f]/70 p-4 shadow-[0_14px_35px_rgba(0,0,0,0.20)] backdrop-blur-2xl"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="truncate text-sm font-black text-white">
-                        {item.fullName}
-                      </p>
+          <div className="flex flex-col gap-2.5">
+            {filteredPreRegisters.map((item) => {
+              const isExpanded = expandedInviteId === item.id;
+              const roleLabel = item.role === "admin" ? "Admin" : item.role === "guest" ? "Convidado" : "Membro";
 
-                      {item.claimed && (
-                        <CheckCircle
-                          size={16}
-                          className="shrink-0 text-app-primary"
-                        />
-                      )}
-                    </div>
-
-                    <p className="mt-1 text-xs text-slate-500">
-                      +{item.phone}
-                    </p>
-                  </div>
-
+              return (
+                <div key={item.id} className={`admin-list-card admin-invite-card ${isExpanded ? "admin-invite-card--expanded" : ""}`}>
                   <button
                     type="button"
-                    onClick={() => setDeleteTarget(item)}
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-slate-400 transition hover:text-red-400 active:scale-95"
+                    aria-expanded={isExpanded}
+                    onClick={() => setExpandedInviteId((current) => current === item.id ? null : item.id)}
+                    className="flex h-14 w-full items-center justify-between gap-3 px-4 text-left"
                   >
-                    <Trash2 size={16} />
+                    <span className="min-w-0 flex-1 truncate text-sm font-black text-white">{item.fullName}</span>
+                    <span className={`admin-invite-status ${item.claimed ? "admin-invite-status--claimed" : ""}`}>
+                      {item.claimed ? "Cadastrado" : "Pendente"}
+                    </span>
+                    <ChevronDown size={17} className={`shrink-0 text-[#ff8b58] transition-transform ${isExpanded ? "rotate-180" : ""}`} />
                   </button>
+
+                  <div className={`admin-invite-details ${isExpanded ? "admin-invite-details--open" : ""}`}>
+                    <div className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-2 px-4 pb-4 pt-1 text-xs">
+                      <span className="text-white/38">celular</span>
+                      <span className="text-right text-white/72">+{item.phone}</span>
+                      <span className="text-white/38">tipo</span>
+                      <span className="text-right text-white/72">{roleLabel}</span>
+                      <span className="text-white/38">sexo</span>
+                      <span className="inline-flex items-center justify-end gap-1 text-white/72">
+                        {item.sex === "female" ? <Venus size={13} className="text-[#ff8a62]" /> : <Mars size={13} className="text-[#ff6235]" />}
+                        {item.sex === "female" ? "Mulher" : "Homem"}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setDeleteTarget(item)}
+                      className="admin-delete-action mx-4 mb-4 flex h-10 w-[calc(100%_-_2rem)] items-center justify-center gap-2 text-sm"
+                    >
+                      <Trash2 size={16} />
+                      excluir convite
+                    </button>
+                  </div>
                 </div>
-
-                <div className="mt-3 flex items-center gap-2">
-                  <span className="rounded-full bg-white/[0.06] px-3 py-1 text-xs font-semibold text-slate-400">
-                    {item.role === "admin"
-                      ? "Admin"
-                      : item.role === "guest"
-                        ? "Convidado"
-                        : "Membro"}
-                  </span>
-
-                  <span className="rounded-full bg-white/[0.06] px-3 py-1 text-xs font-semibold text-slate-400">
-                    {item.claimed ? "Cadastrado" : "Pendente"}
-                  </span>
-
-                  <span className="inline-flex items-center gap-1 rounded-full bg-white/[0.06] px-3 py-1 text-xs font-semibold text-slate-400">
-                    {item.sex === "female" ? (
-                      <Venus size={13} className="text-app-accent" />
-                    ) : (
-                      <Mars size={13} className="text-app-secondary" />
-                    )}
-                    {item.sex === "female" ? "Mulher" : "Homem"}
-                  </span>
-                </div>
-              </div>
-            ))}
+              );
+            })}
 
             {!filteredPreRegisters.length && (
               <p className="mt-8 text-center text-sm text-slate-500">
@@ -299,20 +328,15 @@ export default function PreRegistersManager() {
         <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/60 px-5 pb-5 backdrop-blur-sm">
           <form
             onSubmit={handleCreatePreRegister}
-            className="w-full max-w-[420px] rounded-[1.8rem] border border-white/10 bg-[#13201c]/95 p-5 shadow-[0_20px_60px_rgba(0,0,0,0.45)] backdrop-blur-3xl"
+            className="profile-edit-modal w-full max-w-[420px] p-5"
           >
             <div className="mb-5 flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-black">Novo convite</h2>
-                <p className="text-sm text-slate-500">
-                  Adicionar usuário autorizado
-                </p>
-              </div>
+              <h2 className="font-idv-title text-2xl">Novo convite</h2>
 
               <button
                 type="button"
                 onClick={() => setShowModal(false)}
-                className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-slate-400"
+                className="profile-modal-close flex h-10 w-10 items-center justify-center text-white/70"
               >
                 <X size={18} />
               </button>
@@ -323,7 +347,7 @@ export default function PreRegistersManager() {
                 value={fullName}
                 onChange={(event) => setFullName(event.target.value)}
                 placeholder="Nome completo"
-                className="h-12 rounded-[1.4rem] border border-white/10 bg-white/[0.06] px-4 text-sm text-white outline-none placeholder:text-slate-500 focus:border-app-primary/30 focus:ring-4 focus:ring-app-primary/10"
+                className="admin-input h-12 px-4 text-sm text-white outline-none placeholder:text-white/30"
               />
 
               <input
@@ -331,20 +355,10 @@ export default function PreRegistersManager() {
                 onChange={(event) => setPhone(maskPhone(event.target.value))}
                 placeholder="61 9 9999-9999"
                 inputMode="numeric"
-                className="h-12 rounded-[1.4rem] border border-white/10 bg-white/[0.06] px-4 text-sm text-white outline-none placeholder:text-slate-500 focus:border-app-primary/30 focus:ring-4 focus:ring-app-primary/10"
+                className="admin-input h-12 px-4 text-sm text-white outline-none placeholder:text-white/30"
               />
 
-              <select
-                value={role}
-                onChange={(event) => setRole(event.target.value)}
-                className="h-10 rounded-full border border-white/10 bg-[#16231f] px-3 text-sm text-stone-300 outline-none focus:border-app-primary/40"
-              >
-                {roleOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+              <IdvSelect value={role} onChange={setRole} options={roleOptions} ariaLabel="Tipo de acesso" />
 
               <div
                 className="relative grid grid-cols-2 rounded-full border border-white/10 bg-white/[0.06] p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]"
@@ -354,8 +368,8 @@ export default function PreRegistersManager() {
                 <span
                   className={`absolute bottom-1 top-1 w-[calc(50%-0.25rem)] rounded-full transition-all duration-300 ease-out ${
                     sex === "female"
-                      ? "left-[calc(50%+0.125rem)] bg-app-accent shadow-[0_0_24px_rgba(251,113,133,0.34)]"
-                      : "left-1 bg-app-secondary shadow-[0_0_24px_rgba(45,212,191,0.30)]"
+                      ? "left-[calc(50%+0.125rem)] bg-[#ff8a2e] shadow-[0_0_24px_rgba(255,138,46,0.3)]"
+                      : "left-1 bg-[#ff4b32] shadow-[0_0_24px_rgba(255,75,50,0.3)]"
                   }`}
                 />
 
@@ -390,7 +404,7 @@ export default function PreRegistersManager() {
               <button
                 type="submit"
                 disabled={isSaving}
-                className="mt-2 flex h-12 items-center justify-center gap-2 rounded-full bg-app-primary text-sm font-black text-slate-950 shadow-[0_10px_30px_rgba(74,222,128,0.28)] active:scale-[0.98] disabled:opacity-50"
+                className="admin-primary-action mt-2 flex h-12 items-center justify-center gap-2 text-sm disabled:opacity-50"
               >
                 <UserPlus size={18} />
                 {isSaving ? "Salvando..." : "Adicionar"}
@@ -402,9 +416,9 @@ export default function PreRegistersManager() {
 
       {createdInvite && (
         <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/60 px-5 pb-5 backdrop-blur-sm">
-          <div className="w-full max-w-[420px] rounded-[1.8rem] border border-white/10 bg-[#13201c]/95 p-5 text-center shadow-[0_20px_60px_rgba(0,0,0,0.45)]">
+          <div className="profile-edit-modal w-full max-w-[420px] p-5 text-center">
             <p className="text-sm text-slate-400">Codigo de primeiro acesso</p>
-            <p className="mt-3 font-mono text-4xl tracking-[0.25em] text-app-primary">
+            <p className="mt-3 text-4xl text-[#ff713f]">
               {createdInvite.temporaryCode}
             </p>
             <p className="mt-3 text-sm text-slate-500">
@@ -413,7 +427,7 @@ export default function PreRegistersManager() {
             <button
               type="button"
               onClick={() => navigator.clipboard.writeText(createdInvite.temporaryCode)}
-              className="mt-5 flex h-12 w-full items-center justify-center gap-2 rounded-full bg-app-primary text-sm font-black text-slate-950"
+              className="admin-primary-action mt-5 flex h-12 w-full items-center justify-center gap-2 text-sm"
             >
               <Copy size={17} />
               Copiar codigo

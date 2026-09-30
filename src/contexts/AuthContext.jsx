@@ -1,5 +1,5 @@
 /* eslint-disable react/prop-types, react-refresh/only-export-components */
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { auth } from "../firebase/firebase";
 import { clearSessionData, preloadUserSession } from "../services/sessionDataService";
@@ -32,6 +32,11 @@ export function AuthProvider({ children }) {
   const [userData, setUserData] = useState(null);
   const [sessionData, setSessionData] = useState(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
+
+  const updateSessionData = useCallback((changes) => {
+    setSessionData((current) => (current ? { ...current, ...changes } : current));
+    if (changes.user) setUserData(changes.user);
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -85,6 +90,7 @@ export function AuthProvider({ children }) {
       userAuth,
       userData,
       sessionData,
+      updateSessionData,
       loadingAuth,
 
       isAuthenticated: !!userAuth && !!userData,
@@ -95,7 +101,7 @@ export function AuthProvider({ children }) {
       isMember: !isGuest,
       isGuest,
     };
-  }, [userAuth, userData, sessionData, loadingAuth]);
+  }, [userAuth, userData, sessionData, loadingAuth, updateSessionData]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

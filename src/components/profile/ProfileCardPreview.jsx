@@ -5,6 +5,10 @@ import ProfileHeader from "./ProfileHeader";
 import ProfileStats from "./ProfileStats";
 import { getProfileAssetUrls } from "../../utils/profileAssets";
 import OrbitLoader from "../OrbitLoader";
+import {
+  DEFAULT_DISPLAY_CARD_ID,
+  getDisplayCard,
+} from "../../data/displayCardsCatalog";
 
 function getDisplayName(person, bundle) {
   return (
@@ -23,7 +27,7 @@ export function PlayerMiniCard({ person, profileBundle, onOpen, onRemove }) {
   const displayName = getDisplayName(person, profileBundle);
 
   return (
-    <div className="group relative min-w-0 flex-1 overflow-visible border-b border-white/10 bg-transparent transition hover:border-[#5bc0ff]/40">
+    <div className="group relative h-11 min-w-0 flex-1 overflow-visible bg-transparent transition">
       {backgroundUrl && (
         <img
           src={backgroundUrl}
@@ -32,13 +36,13 @@ export function PlayerMiniCard({ person, profileBundle, onOpen, onRemove }) {
         />
       )}
 
-      <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-[#210019] via-[#210019]/82 to-transparent" />
+      <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-[#18050a] via-[#18050a]/82 to-transparent" />
       <div className="absolute inset-0 rounded-2xl bg-gradient-to-l from-black/15 via-transparent to-black/20" />
 
       <button
         type="button"
         onClick={onOpen}
-        className={`relative flex h-9 w-full min-w-0 items-center gap-3 px-2.5 text-left transition active:scale-[0.99] ${
+        className={`relative flex h-11 w-full min-w-0 items-center gap-3 px-2.5 text-left transition active:scale-[0.99] ${
           onRemove ? "pr-9" : ""
         }`}
       >
@@ -46,14 +50,14 @@ export function PlayerMiniCard({ person, profileBundle, onOpen, onRemove }) {
           <img
             src={profilePicUrl}
             alt={displayName}
-            className="h-full w-full rounded-full object-cover ring-2 ring-white/10"
+            className="h-full w-full object-cover ring-2 ring-white/10"
           />
 
           {profilePicBorderUrl && (
             <img
               src={profilePicBorderUrl}
               alt=""
-              className="pointer-events-none absolute inset-0 h-full w-full scale-[1.38] object-contain"
+              className="pointer-events-none absolute inset-0 h-full w-full scale-[1.21] object-contain"
             />
           )}
         </div>
@@ -87,21 +91,30 @@ export function ProfileStickerModal({
   const user = profileBundle?.user;
   const profile = user?.profile || {};
   const { backgroundUrl } = getProfileAssetUrls(profile);
+  const selectedCardId = profile.selectedDisplayCardId || DEFAULT_DISPLAY_CARD_ID;
+  const canUseSelectedCard =
+    selectedCardId === DEFAULT_DISPLAY_CARD_ID ||
+    profileBundle?.inventory?.displayCards?.includes(selectedCardId);
+  const displayCard = getDisplayCard(
+    canUseSelectedCard ? selectedCardId : DEFAULT_DISPLAY_CARD_ID,
+  );
 
   return (
     <div className="fixed inset-0 z-[95] flex items-end justify-center bg-black/75 px-4 pb-4 pt-8 backdrop-blur-sm">
-      <article className="profile-sticker-card relative max-h-[92vh] w-full max-w-[430px] overflow-hidden border border-[#5bc0ff]/20 bg-[#210019]/94 p-3 shadow-[0_24px_80px_rgba(0,0,0,0.58)]">
-        {backgroundUrl && (
+      <article className={`profile-sticker-card profile-edit-modal ${displayCard.cardClassName} relative max-h-[92vh] w-full max-w-[430px] overflow-hidden p-3`}>
+        {displayCard.hasShine && backgroundUrl && (
           <img
             src={backgroundUrl}
             alt=""
-            className="absolute inset-0 h-full w-full object-cover opacity-[0.34]"
+            className="absolute inset-0 h-full w-full object-cover opacity-[0.3]"
           />
         )}
 
-        <div className="absolute inset-0 bg-gradient-to-b from-[#210019]/35 via-[#210019]/72 to-[#210019]/96" />
-        <div className="profile-sticker-shine pointer-events-none absolute -inset-y-10 left-0 w-[78%]" />
-        <div className="absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-[#5bc0ff]/70 to-transparent" />
+        <div className={`absolute inset-0 ${displayCard.hasShine ? "bg-gradient-to-b from-[#18050a]/35 via-[#18050a]/72 to-[#18050a]/96" : "bg-gradient-to-b from-[#8f2e10]/25 via-[#5b170c]/72 to-[#2c0908]/96"}`} />
+        {displayCard.hasShine && (
+          <div className="profile-sticker-shine pointer-events-none absolute -inset-y-10 left-0 w-[78%]" />
+        )}
+        <div className="absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-[#ff713f]/75 to-transparent" />
 
         {isLoading ? (
           <div className="relative flex h-[420px] flex-col items-center justify-center gap-3 text-app-primary">

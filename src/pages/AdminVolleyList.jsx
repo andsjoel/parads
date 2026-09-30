@@ -1,9 +1,9 @@
 /* eslint-disable react/prop-types */
 import { useEffect, useMemo, useState } from "react";
 import {
-  ArrowLeft,
   CalendarPlus,
   Crown,
+  Eye,
   Plus,
   RotateCcw,
   ShieldCheck,
@@ -14,11 +14,11 @@ import {
   Volleyball,
   XCircle,
 } from "lucide-react";
-import { Link } from "react-router-dom";
 
 import ConfirmDeleteModal from "../components/ConfirmDeleteModal";
 import OrbitLoader from "../components/OrbitLoader";
 import { useAuth } from "../contexts/AuthContext";
+import generalBackground from "../assets/app-backgrounds/bg-geral.png";
 import {
   addGhostPlayer,
   addVolleyMatchPlayer,
@@ -39,8 +39,30 @@ import {
 function formatDate(date) {
   if (!date) return "Data nao definida";
 
-  const [year, month, day] = date.split("-");
-  return `${day}/${month}/${year}`;
+  const [, month, day] = date.split("-");
+  return `${day}/${month}`;
+}
+
+function maskDayMonth(value) {
+  const numbers = value.replace(/\D/g, "").slice(0, 4);
+  if (numbers.length <= 2) return numbers;
+  return `${numbers.slice(0, 2)}/${numbers.slice(2)}`;
+}
+
+function resolveListDate(value) {
+  const [day, month] = value.split("/").map(Number);
+  const year = new Date().getFullYear();
+  const parsed = new Date(year, month - 1, day);
+
+  if (
+    !day ||
+    !month ||
+    parsed.getFullYear() !== year ||
+    parsed.getMonth() !== month - 1 ||
+    parsed.getDate() !== day
+  ) return "";
+
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
 function getDisplayName(user) {
@@ -62,7 +84,7 @@ function PlayerPill({
 }) {
   if (!player) {
     return (
-      <div className="flex h-11 items-center justify-center rounded-2xl border border-dashed border-white/10 bg-white/[0.025] text-xs font-black text-[#66736b]">
+      <div className="admin-volley-slot flex h-11 items-center justify-center text-xs font-black text-[#66736b]">
         Vaga
       </div>
     );
@@ -79,7 +101,7 @@ function PlayerPill({
           onSelect();
         }
       }}
-      className={`group flex min-h-11 items-center justify-between gap-2 rounded-2xl border px-3 py-2 text-left transition active:scale-[0.98] ${
+      className={`admin-volley-player group flex min-h-11 items-center justify-between gap-2 border px-3 py-2 text-left transition active:scale-[0.98] ${
         selected
           ? "border-app-primary bg-app-primary/14 shadow-[0_0_18px_rgba(255,183,3,0.18)]"
           : "border-white/10 bg-white/[0.045]"
@@ -161,7 +183,7 @@ function TeamCard({
   const players = team?.players || [];
 
   return (
-    <section className="rounded-[1.45rem] border border-white/10 bg-[#17231f]/72 p-3 shadow-[0_12px_34px_rgba(0,0,0,0.2)] backdrop-blur-2xl">
+    <section className="admin-volley-card admin-volley-team p-3">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
           <h2 className="text-sm font-black text-[#fffaf0]">{title}</h2>
@@ -174,7 +196,7 @@ function TeamCard({
           <button
             type="button"
             onClick={onWin}
-            className="rounded-full bg-app-primary px-3 py-2 text-xs font-black text-[#17231f] active:scale-[0.98]"
+            className="admin-primary-action px-3 py-2 text-xs active:scale-[0.98]"
           >
             Venceu
           </button>
@@ -204,7 +226,7 @@ function TeamCard({
 
 function PresenceCard({ title, icon: Icon, people, limit }) {
   return (
-    <section className="rounded-[1.45rem] border border-white/10 bg-[#17231f]/72 p-3 shadow-[0_12px_34px_rgba(0,0,0,0.2)] backdrop-blur-2xl">
+    <section className="admin-volley-card admin-volley-presence p-3">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-app-primary/15 text-app-primary">
@@ -251,6 +273,102 @@ function PresenceCard({ title, icon: Icon, people, limit }) {
   );
 }
 
+function CurrentListModal({ list, usersById, onClose }) {
+  const groups = [
+    { title: "Levantadores", icon: Crown, people: list.setters || [], limit: 4 },
+    { title: "Jogadores", icon: Volleyball, people: list.players || [], limit: 26 },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 px-5 py-6 backdrop-blur-sm">
+      <div className="profile-edit-modal flex max-h-[calc(100vh-3rem)] w-full max-w-[420px] flex-col p-5 text-white">
+        <div className="mb-4 flex shrink-0 items-center justify-between gap-4">
+          <div>
+            <h2 className="font-idv-title text-2xl">Lista atual</h2>
+            <p className="mt-1 text-sm font-bold text-app-primary">
+              {formatDate(list.date)} · {(list.setters || []).length + (list.players || []).length}/30
+            </p>
+          </div>
+          <button type="button" onClick={onClose} className="profile-modal-close flex h-9 w-9 items-center justify-center text-white/70" aria-label="Fechar lista">
+            <XCircle size={17} />
+          </button>
+        </div>
+
+        <div className="profile-edit-content min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
+          {groups.map(({ title, icon: Icon, people, limit }) => (
+            <section key={title} className="admin-volley-card admin-volley-presence p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Icon size={16} className="text-app-primary" />
+                  <h3 className="text-sm font-black text-[#fffaf0]">{title}</h3>
+                </div>
+                <span className="text-xs font-black text-app-primary">{people.length}/{limit}</span>
+              </div>
+
+              <div className="divide-y divide-white/8 border border-white/10 bg-black/15">
+                {Array.from({ length: limit }).map((_, index) => {
+                  const person = people[index];
+                  const realName = person ? usersById[person.id]?.fullName?.trim() : "";
+
+                  return (
+                    <div key={`${title}-${index}`} className="flex min-h-9 items-center gap-3 px-3 py-2">
+                      <span className="w-5 shrink-0 text-center text-[10px] font-black text-app-primary">{index + 1}</span>
+                      <span className={`truncate text-sm font-bold ${realName ? "text-[#fffaf0]" : "text-white/20"}`}>
+                        {realName || "Vaga"}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ListActionModal({ action, isLoading, onClose, onConfirm }) {
+  const isStart = action === "start";
+  const Icon = isStart ? Volleyball : XCircle;
+
+  return (
+    <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/65 px-5 pb-5 backdrop-blur-sm">
+      <div className="profile-edit-modal w-full max-w-[420px] p-5 text-white">
+        <div className="mb-5 flex items-start justify-between gap-4">
+          <div className="flex gap-3">
+            <div className={`flex h-11 w-11 shrink-0 items-center justify-center ${isStart ? "admin-service-icon" : "admin-delete-icon"}`}>
+              <Icon size={20} />
+            </div>
+            <div>
+              <h2 className="font-idv-title text-2xl">
+                {isStart ? "Iniciar lista?" : "Encerrar lista?"}
+              </h2>
+              <p className="mt-1 text-sm text-white/48">
+                {isStart
+                  ? "Os times serão montados e a partida será iniciada."
+                  : "A lista será finalizada e não poderá receber novas alterações."}
+              </p>
+            </div>
+          </div>
+          <button type="button" onClick={onClose} disabled={isLoading} className="profile-modal-close flex h-9 w-9 shrink-0 items-center justify-center text-white/70 disabled:opacity-50">
+            <XCircle size={17} />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <button type="button" onClick={onClose} disabled={isLoading} className="register-outline-action h-11 text-sm disabled:opacity-50">
+            cancelar
+          </button>
+          <button type="button" onClick={onConfirm} disabled={isLoading} className={`${isStart ? "admin-primary-action" : "admin-delete-action"} flex h-11 items-center justify-center text-sm disabled:opacity-50`}>
+            {isLoading ? "aguarde..." : isStart ? "iniciar" : "encerrar"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminVolleyList() {
   const { isAdmin, userData } = useAuth();
 
@@ -267,6 +385,8 @@ export default function AdminVolleyList() {
   const [removeTarget, setRemoveTarget] = useState(null);
   const [selectedEntryId, setSelectedEntryId] = useState(null);
   const [showRules, setShowRules] = useState(false);
+  const [confirmAction, setConfirmAction] = useState(null);
+  const [showCurrentList, setShowCurrentList] = useState(false);
 
   useEffect(() => {
     setIsLoading(true);
@@ -337,6 +457,10 @@ export default function AdminVolleyList() {
   const isInProgress = list?.status === "in_progress";
   const totalConfirmed = (list?.setters || []).length + (list?.players || []).length;
   const totalPresent = activeMatchPlayers.length;
+  const usersById = useMemo(
+    () => Object.fromEntries(users.map((user) => [user.id, user])),
+    [users],
+  );
 
   async function runAdminAction(actionName, action) {
     try {
@@ -352,11 +476,12 @@ export default function AdminVolleyList() {
   }
 
   function handleCreateList() {
-    if (!date || !userData || !isAdmin) return;
+    const resolvedDate = resolveListDate(date);
+    if (!resolvedDate || !userData || !isAdmin) return;
 
     runAdminAction("create", async () => {
       await createVolleyList({
-        date,
+        date: resolvedDate,
         adminUser: userData,
       });
       setDate("");
@@ -452,10 +577,10 @@ export default function AdminVolleyList() {
 
   if (!isAdmin) {
     return (
-      <main className="min-h-screen px-5 pb-28 pt-6 text-white">
+      <main className="admin-volley-page min-h-screen px-5 pb-28 pt-6 text-white" style={{ backgroundImage: `url(${generalBackground})` }}>
         <section className="mx-auto flex min-h-[60vh] w-full max-w-[420px] items-center justify-center">
-          <div className="rounded-[2rem] border border-dashed border-white/10 bg-white/[0.04] p-6 text-center">
-            <ShieldCheck className="mx-auto mb-3 text-app-primary" size={28} />
+          <div className="admin-panel p-6 text-center">
+            <ShieldCheck className="mx-auto mb-3 text-[#ff713f]" size={28} />
             <p className="text-lg font-black text-[#fffaf0]">
               Somente administradores.
             </p>
@@ -466,30 +591,8 @@ export default function AdminVolleyList() {
   }
 
   return (
-    <main className="min-h-screen px-5 pb-28 pt-6 text-white">
+    <main className="admin-volley-page min-h-screen px-5 pb-28 pt-6 text-white" style={{ backgroundImage: `url(${generalBackground})` }}>
       <section className="mx-auto w-full max-w-[420px] space-y-4">
-        <header className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <Link
-              to="/admin"
-              className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-slate-400"
-            >
-              <ArrowLeft size={18} />
-            </Link>
-
-            <div>
-              <h1 className="text-xl font-black text-[#fffaf0]">Lista</h1>
-              <p className="text-sm font-semibold text-[#9aa89f]">
-                Operacao da pelada
-              </p>
-            </div>
-          </div>
-
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-app-primary/15 text-app-primary">
-            <ShieldCheck size={19} />
-          </div>
-        </header>
-
         {isLoading ? (
           <div className="flex min-h-[240px] items-center justify-center">
             <OrbitLoader />
@@ -503,7 +606,7 @@ export default function AdminVolleyList() {
             )}
 
             {!list ? (
-              <section className="rounded-[1.5rem] border border-white/10 bg-[#17231f]/72 p-4 shadow-[0_12px_34px_rgba(0,0,0,0.2)] backdrop-blur-2xl">
+              <section className="admin-volley-card admin-volley-create p-4">
                 <div className="mb-4 flex items-center gap-2">
                   <CalendarPlus size={18} className="text-app-primary" />
                   <h2 className="text-sm font-black text-[#fffaf0]">
@@ -512,16 +615,20 @@ export default function AdminVolleyList() {
                 </div>
 
                 <input
-                  type="date"
+                  type="text"
                   value={date}
-                  onChange={(event) => setDate(event.target.value)}
+                  onChange={(event) => setDate(maskDayMonth(event.target.value))}
+                  inputMode="numeric"
+                  maxLength={5}
+                  placeholder="dd/mm"
+                  aria-label="Dia e mês da lista"
                   className="mb-3 h-12 w-full rounded-2xl border border-white/10 bg-white/[0.06] px-4 text-sm font-bold text-[#fffaf0] outline-none focus:border-app-primary/40"
                 />
 
                 <button
                   type="button"
                   onClick={handleCreateList}
-                  disabled={!date || busyAction === "create"}
+                  disabled={!resolveListDate(date) || busyAction === "create"}
                   className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-app-primary text-sm font-black text-[#17231f] active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-white/[0.05] disabled:text-[#66736b]"
                 >
                   <CalendarPlus size={17} />
@@ -530,7 +637,7 @@ export default function AdminVolleyList() {
               </section>
             ) : (
               <>
-                <section className="rounded-[1.5rem] border border-white/10 bg-[#17231f]/72 p-4 shadow-[0_12px_34px_rgba(0,0,0,0.2)] backdrop-blur-2xl">
+                <section className="admin-volley-card admin-volley-summary p-4">
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="text-xs font-bold uppercase tracking-[0.14em] text-app-primary">
@@ -541,35 +648,18 @@ export default function AdminVolleyList() {
                       </h2>
                     </div>
 
-                    <p className="text-2xl font-black text-app-primary">
-                      {isOpen ? totalConfirmed : totalPresent}
-                    </p>
-                  </div>
-
-                  <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-                    <div className="rounded-2xl bg-white/[0.04] p-2">
-                      <p className="text-lg font-black text-[#fffaf0]">
-                        {isOpen ? (list.setters || []).length : list.summary?.totalGames || 0}
+                    <div className="flex items-center gap-2">
+                      <p className="text-2xl font-black text-app-primary">
+                        {isOpen ? totalConfirmed : totalPresent}
                       </p>
-                      <p className="text-[10px] font-bold text-[#9aa89f]">
-                        {isOpen ? "levant." : "jogos"}
-                      </p>
-                    </div>
-                    <div className="rounded-2xl bg-white/[0.04] p-2">
-                      <p className="text-lg font-black text-[#fffaf0]">
-                        {isOpen ? (list.players || []).length : list.summary?.totalGhosts || 0}
-                      </p>
-                      <p className="text-[10px] font-bold text-[#9aa89f]">
-                        {isOpen ? "jogadores" : "ghosts"}
-                      </p>
-                    </div>
-                    <div className="rounded-2xl bg-white/[0.04] p-2">
-                      <p className="text-lg font-black text-[#fffaf0]">
-                        {isOpen ? totalConfirmed : list.summary?.noShowsCount || 0}
-                      </p>
-                      <p className="text-[10px] font-bold text-[#9aa89f]">
-                        {isOpen ? "confirm." : "faltas"}
-                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setShowCurrentList(true)}
+                        className="profile-modal-close flex h-10 w-10 items-center justify-center text-app-primary"
+                        aria-label="Ver lista atual"
+                      >
+                        <Eye size={18} />
+                      </button>
                     </div>
                   </div>
                 </section>
@@ -578,11 +668,7 @@ export default function AdminVolleyList() {
                   {isOpen && (
                     <button
                       type="button"
-                      onClick={() =>
-                        runAdminAction("start-match", () =>
-                          startVolleyMatch({ listId: list.id }),
-                        )
-                      }
+                      onClick={() => setConfirmAction("start")}
                       disabled={busyAction === "start-match"}
                       className="flex h-11 items-center justify-center gap-2 rounded-2xl bg-app-primary text-sm font-black text-[#17231f] active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-white/[0.05] disabled:text-[#66736b]"
                     >
@@ -593,11 +679,7 @@ export default function AdminVolleyList() {
 
                   <button
                     type="button"
-                    onClick={() =>
-                      runAdminAction("finish", () =>
-                        finishVolleyList({ listId: list.id }),
-                      )
-                    }
+                    onClick={() => setConfirmAction("finish")}
                     disabled={busyAction === "finish"}
                     className="flex h-11 items-center justify-center gap-2 rounded-2xl bg-red-500/10 text-sm font-black text-red-300 active:scale-[0.98] disabled:opacity-50"
                   >
@@ -643,7 +725,7 @@ export default function AdminVolleyList() {
                 )}
 
                 {isInProgress && (
-                  <section className="rounded-[1.45rem] border border-white/10 bg-[#17231f]/72 p-3 shadow-[0_12px_34px_rgba(0,0,0,0.2)] backdrop-blur-2xl">
+                  <section className="admin-volley-card admin-volley-rules p-3">
                     <button
                       type="button"
                       onClick={() => setShowRules((current) => !current)}
@@ -772,7 +854,7 @@ export default function AdminVolleyList() {
 
                 {isInProgress && (
                   <>
-                    <section className="rounded-[1.45rem] border border-white/10 bg-[#17231f]/72 p-3 shadow-[0_12px_34px_rgba(0,0,0,0.2)] backdrop-blur-2xl">
+                    <section className="admin-volley-card admin-volley-arrivals p-3">
                       <div className="mb-3 flex items-center gap-2">
                         <UserRoundPlus size={17} className="text-app-primary" />
                         <h2 className="text-sm font-black text-[#fffaf0]">
@@ -828,7 +910,7 @@ export default function AdminVolleyList() {
                       </div>
                     </section>
 
-                    <section className="rounded-[1.45rem] border border-white/10 bg-[#17231f]/72 p-3 shadow-[0_12px_34px_rgba(0,0,0,0.2)] backdrop-blur-2xl">
+                    <section className="admin-volley-card admin-volley-ghost p-3">
                       <div className="mb-3 flex items-center gap-2">
                         <Volleyball size={17} className="text-app-primary" />
                         <h2 className="text-sm font-black text-[#fffaf0]">
@@ -898,6 +980,30 @@ export default function AdminVolleyList() {
           isLoading={busyAction === `remove-${removeTarget.entryId}`}
           onClose={() => setRemoveTarget(null)}
           onConfirm={handleConfirmRemove}
+        />
+      )}
+
+      {confirmAction && (
+        <ListActionModal
+          action={confirmAction}
+          isLoading={busyAction === "start-match" || busyAction === "finish"}
+          onClose={() => setConfirmAction(null)}
+          onConfirm={async () => {
+            if (confirmAction === "start") {
+              await runAdminAction("start-match", () => startVolleyMatch({ listId: list.id }));
+            } else {
+              await runAdminAction("finish", () => finishVolleyList({ listId: list.id }));
+            }
+            setConfirmAction(null);
+          }}
+        />
+      )}
+
+      {showCurrentList && list && (
+        <CurrentListModal
+          list={list}
+          usersById={usersById}
+          onClose={() => setShowCurrentList(false)}
         />
       )}
     </main>

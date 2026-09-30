@@ -62,7 +62,7 @@ export default function ProfileStats({ stats }) {
             >
               <Icon
                 size={16}
-                className={isSelected ? "text-[#5bc0ff]" : "text-white/45"}
+                className={isSelected ? "text-[#ff713f]" : "text-white/45"}
               />
 
               <strong

@@ -543,8 +543,24 @@ export async function seedMockVolleyPlayers({ listId }) {
       stats: emptyPlayerStats(),
     }));
     const matchPlayers = [...setters, ...players];
+    const mockSetters = setters.map((player) => ({
+      id: player.entryId,
+      name: player.displayName,
+      username: "",
+      role: "guest",
+      sex: player.sex,
+    }));
+    const mockPlayers = players.map((player) => ({
+      id: player.entryId,
+      name: player.displayName,
+      username: "",
+      role: "guest",
+      sex: player.sex,
+    }));
     const nextList = {
       ...list,
+      setters: mockSetters,
+      players: mockPlayers,
       matchPlayers,
       teams: [],
       returnTeam: null,
@@ -552,6 +568,8 @@ export async function seedMockVolleyPlayers({ listId }) {
     };
 
     transaction.update(listRef, {
+      setters: mockSetters,
+      players: mockPlayers,
       matchPlayers,
       teams: [],
       returnTeam: null,

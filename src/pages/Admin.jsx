@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { UserPlus, Users, ShieldCheck, Settings } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
+import generalBackground from "../assets/app-backgrounds/bg-geral.png";
 
 const adminServices = [
   {
@@ -9,6 +10,7 @@ const adminServices = [
     icon: UserPlus,
     to: "/admin/pre-registers",
     disabled: false,
+    tone: "invites",
   },
   {
     title: "Atletas",
@@ -16,6 +18,7 @@ const adminServices = [
     icon: Users,
     to: "#",
     disabled: true,
+    tone: "athletes",
   },
   {
     title: "Lista",
@@ -23,6 +26,7 @@ const adminServices = [
     icon: ShieldCheck,
     to: "/admin/volley-list",
     disabled: false,
+    tone: "list",
   },
   {
     title: "Arena",
@@ -30,6 +34,7 @@ const adminServices = [
     icon: Settings,
     to: "#",
     disabled: true,
+    tone: "arena",
   },
 ];
 
@@ -38,10 +43,10 @@ export default function Admin() {
 
   if (!isAdmin) {
     return (
-      <main className="min-h-screen px-5 pb-28 pt-6 text-white">
+      <main className="admin-page min-h-screen px-5 pb-28 pt-6 text-white" style={{ backgroundImage: `url(${generalBackground})` }}>
         <section className="mx-auto flex min-h-[60vh] w-full max-w-[420px] items-center justify-center">
-          <div className="w-full rounded-[2rem] border border-dashed border-white/10 bg-white/[0.04] p-6 text-center">
-            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-3xl bg-app-primary/15 text-app-primary">
+          <div className="admin-panel w-full p-6 text-center">
+            <div className="admin-service-icon mx-auto mb-4 flex h-14 w-14 items-center justify-center">
               <ShieldCheck size={26} />
             </div>
 
@@ -59,8 +64,10 @@ export default function Admin() {
   }
 
   return (
-    <main className="min-h-screen px-5 pb-28 pt-6 text-white">
+    <main className="admin-page min-h-screen px-5 pb-28 pt-6 text-white" style={{ backgroundImage: `url(${generalBackground})` }}>
       <section className="mx-auto w-full max-w-[420px]">
+
+        <h1 className="font-idv-title mb-5 text-3xl text-[#fffaf0]">admin</h1>
 
         <div className="grid grid-cols-2 gap-3">
           {adminServices.map((service) => {
@@ -76,10 +83,11 @@ export default function Admin() {
                   flex-col
                   justify-between
                   overflow-hidden
-                  rounded-[1.8rem]
+                  admin-service-card
+                  admin-service-card--${service.tone}
                   border
                   border-white/10
-                  bg-[#17231f]/75
+                  bg-[#18050a]/75
                   p-4
                   shadow-[0_14px_40px_rgba(0,0,0,0.24)]
                   backdrop-blur-2xl
@@ -99,9 +107,7 @@ export default function Admin() {
                   className="
                     relative z-10
                     flex h-12 w-12 items-center justify-center
-                    rounded-2xl
-                    bg-app-primary/15
-                    text-app-primary
+                    admin-service-icon
                     transition-all duration-300
                     group-hover:scale-105
                     group-hover:shadow-[0_0_26px_rgba(255,183,3,0.28)]

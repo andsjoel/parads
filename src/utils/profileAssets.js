@@ -7,7 +7,7 @@ const backgroundImages = import.meta.glob(
 );
 
 const profilePicImages = import.meta.glob(
-  "../assets/profile-pics/*.{png,jpg,jpeg,webp}",
+  "../assets/profile-pics/*.{png,jpg,jpeg,webp,gif}",
   {
     eager: true,
     import: "default",
@@ -15,7 +15,7 @@ const profilePicImages = import.meta.glob(
 );
 
 const profilePicBorderImages = import.meta.glob(
-  "../assets/profile-pic-borders/*.{png,jpg,jpeg,webp,svg}",
+  "../assets/profile-pic-borders/*.{png,jpg,jpeg,webp,gif,svg}",
   {
     eager: true,
     import: "default",
@@ -49,13 +49,13 @@ export function getProfileAssetUrls(profile = {}) {
   const backgroundUrl = getAssetById(
     backgroundImages,
     profile.selectedBackgroundId,
-    "bg-default-1",
+    "bg-default",
   );
 
   const profilePicUrl = getAssetById(
     profilePicImages,
     profile.selectedProfilePicId,
-    "pic-default-1",
+    "pic-default",
   );
 
   const profilePicBorderUrl = profile.selectedProfilePicBorderId

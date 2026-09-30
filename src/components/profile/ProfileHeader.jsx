@@ -1,12 +1,18 @@
 /* eslint-disable react/prop-types */
-import { useEffect, useMemo, useState } from "react";
-import { Check, Edit3, Image, Sparkles, UserRound, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Check, ChevronDown, Edit3, GalleryVerticalEnd, Image, Sparkles, UserRound, X } from "lucide-react";
 
 import { updateUserProfile } from "../../services/profileService";
+import { purchaseProfileItem } from "../../services/profileStoreService";
+import coinIcon from "../../assets/achievements/coin.png";
 
 import { profileBackgroundsCatalog } from "../../data/profileBackgroundsCatalog";
 import { profilePicsCatalog } from "../../data/profilePicsCatalog";
 import { profilePicBordersCatalog } from "../../data/profilePicBordersCatalog";
+import {
+  DEFAULT_DISPLAY_CARD_ID,
+  displayCardsCatalog,
+} from "../../data/displayCardsCatalog";
 import {
   getAssetById,
   getCatalogAssetList,
@@ -22,10 +28,11 @@ const {
 const statusIcons = ["✦", "⚡", "🔥", "🏐", "👑", "🌙", "💫", "🪽"];
 
 function getThemeFromItem(item) {
-  return item.theme || "default";
+  return item.theme || "normal";
 }
 
 function getItemName(items, id) {
+  if (id === "bg-default" || id === "pic-default" || id === DEFAULT_DISPLAY_CARD_ID) return "Padrão";
   return items.find((item) => item.id === id)?.name || id;
 }
 
@@ -45,15 +52,21 @@ export default function ProfileHeader({
   const [isEditing, setIsEditing] = useState(false);
   const [pickerType, setPickerType] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [localInventory, setLocalInventory] = useState(inventory || {});
 
   const [draftProfile, setDraftProfile] = useState({
     displayName: profile.displayName || user?.fullName || "Jogador",
     statusMessage: profile.statusMessage || "",
-    selectedBackgroundId: profile.selectedBackgroundId || "bg-default-1",
-    selectedProfilePicId: profile.selectedProfilePicId || "pic-default-1",
+    selectedBackgroundId: profile.selectedBackgroundId || "bg-default",
+    selectedProfilePicId: profile.selectedProfilePicId || "pic-default",
     selectedProfilePicBorderId: profile.selectedProfilePicBorderId || null,
+    selectedDisplayCardId: profile.selectedDisplayCardId || DEFAULT_DISPLAY_CARD_ID,
     selectedStatusIcon: profile.selectedStatusIcon || "✦",
   });
+
+  useEffect(() => {
+    setLocalInventory(inventory || {});
+  }, [inventory]);
 
   const backgrounds = useMemo(
     () => getCatalogAssetList(backgroundImages, profileBackgroundsCatalog),
@@ -89,13 +102,13 @@ export default function ProfileHeader({
   const backgroundUrl = getAssetById(
     backgroundImages,
     selectedBackgroundId,
-    "bg-default-1",
+    "bg-default",
   );
 
   const profilePicUrl = getAssetById(
     profilePicImages,
     selectedProfilePicId,
-    "pic-default-1",
+    "pic-default",
   );
 
   const profilePicBorderUrl = selectedProfilePicBorderId
@@ -118,9 +131,10 @@ export default function ProfileHeader({
     setDraftProfile({
       displayName: profile.displayName || user?.fullName || "Jogador",
       statusMessage: profile.statusMessage || "",
-      selectedBackgroundId: profile.selectedBackgroundId || "bg-default-1",
-      selectedProfilePicId: profile.selectedProfilePicId || "pic-default-1",
+      selectedBackgroundId: profile.selectedBackgroundId || "bg-default",
+      selectedProfilePicId: profile.selectedProfilePicId || "pic-default",
       selectedProfilePicBorderId: profile.selectedProfilePicBorderId || null,
+      selectedDisplayCardId: profile.selectedDisplayCardId || DEFAULT_DISPLAY_CARD_ID,
       selectedStatusIcon: profile.selectedStatusIcon || "✦",
     });
 
@@ -172,15 +186,19 @@ export default function ProfileHeader({
 
   function isUnlocked(type, id) {
     if (type === "background") {
-      return inventory?.backgrounds?.includes(id);
+      return localInventory?.backgrounds?.includes(id);
     }
 
     if (type === "profilePic") {
-      return inventory?.profilePics?.includes(id);
+      return localInventory?.profilePics?.includes(id);
     }
 
     if (type === "profilePicBorder") {
-      return inventory?.profilePicBorders?.includes(id);
+      return localInventory?.profilePicBorders?.includes(id);
+    }
+
+    if (type === "displayCard") {
+      return id === DEFAULT_DISPLAY_CARD_ID || localInventory?.displayCards?.includes(id);
     }
 
     return true;
@@ -210,7 +228,23 @@ export default function ProfileHeader({
       }));
     }
 
-    setPickerType(null);
+    if (type === "displayCard") {
+      setDraftProfile((current) => ({
+        ...current,
+        selectedDisplayCardId: id,
+      }));
+    }
+
+  }
+
+  async function purchaseItem(type, id) {
+    const result = await purchaseProfileItem({ uid: user.id, type, itemId: id });
+    setLocalInventory(result.inventory);
+    onUpdated?.({
+      ...user,
+      progression: { ...user.progression, coins: result.coins },
+    }, { inventory: result.inventory });
+    return result;
   }
 
   return (
@@ -235,8 +269,9 @@ export default function ProfileHeader({
 
               <div className="absolute inset-0 bg-gradient-to-b from-black/5 via-[#210019]/20 to-[#210019]" />
 
-              <div className="profile-level-badge absolute left-5 top-5 px-3 py-1.5 text-xs font-semibold text-white/70 backdrop-blur-xl">
-                Nv. {user?.progression?.level || 1}
+              <div className="profile-level-badge absolute left-5 top-5 flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white/85 backdrop-blur-xl">
+                <img src={coinIcon} alt="" className="h-5 w-5 object-contain" />
+                <span>{user?.progression?.coins ?? 0}</span>
               </div>
 
               {readOnly ? (
@@ -266,7 +301,7 @@ export default function ProfileHeader({
                   <img
                     src={profilePicUrl}
                     alt={displayName}
-                    className="h-full w-full rounded-full object-cover"
+                    className="h-full w-full object-cover"
                   />
 
                   {profilePicBorderUrl && (
@@ -276,18 +311,18 @@ export default function ProfileHeader({
                       className="
                         pointer-events-none absolute inset-0 z-10
                         h-full w-full object-contain
-                        scale-[1.38]
+                        scale-[1.21]
                       "
                     />
                   )}
                 </div>
 
                 <div className="min-w-0 flex-1 pb-1">
-                  <h2 className="login-username-value break-words text-[clamp(2.35rem,10vw,3.75rem)] leading-[0.92] text-[#fffaf0] drop-shadow">
+                  <h2 className="font-idv-title break-words text-[clamp(2.35rem,10vw,3.75rem)] leading-[0.92] text-[#fffaf0] drop-shadow">
                     {displayName}
                   </h2>
 
-                  <p className="mt-2 break-all text-sm font-normal text-[#5bc0ff]/75">
+                  <p className="mt-2 break-all text-sm font-normal text-[#ff8b58]/80">
                     @{user?.username || "player"}
                   </p>
                 </div>
@@ -303,10 +338,10 @@ export default function ProfileHeader({
             </div>
           </>
         ) : (
-          <div className="max-h-[calc(100vh-2.5rem)] w-full max-w-[420px] overflow-y-auto border border-white/10 bg-[#210019]/95 p-5 shadow-[0_20px_60px_rgba(0,0,0,0.48)] backdrop-blur-3xl">
-            <div className="mb-4 flex items-center justify-between">
+          <div className="profile-edit-modal flex max-h-[calc(100vh-2.5rem)] w-full max-w-[420px] flex-col overflow-hidden p-0">
+            <div className="profile-edit-header flex shrink-0 items-center justify-between px-5 pb-4 pt-5">
               <div>
-                <h2 className="text-lg font-black text-[#fffaf0]">
+                <h2 className="font-idv-title text-2xl text-[#fffaf0]">
                   Editar perfil
                 </h2>
               </div>
@@ -314,17 +349,18 @@ export default function ProfileHeader({
               <button
                 type="button"
                 onClick={cancelEditing}
-                className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white"
+                className="profile-modal-close flex h-9 w-9 items-center justify-center text-white"
               >
                 <X size={17} />
               </button>
             </div>
 
-            <div className="flex flex-col gap-3">
+            <div className="profile-edit-content min-h-0 flex-1 overflow-y-auto px-5 py-1">
+              <div className="flex flex-col gap-3 pb-3">
               <EditRow
-                icon={Sparkles}
-                label="Nível"
-                value={`Nv. ${user?.progression?.level || 1}`}
+                icon={coinIcon}
+                label="Moedas"
+                value={`${user?.progression?.coins ?? 0}c`}
                 disabled
               />
 
@@ -353,6 +389,13 @@ export default function ProfileHeader({
                 onClick={() => setPickerType("profilePicBorder")}
               />
 
+              <EditRow
+                icon={GalleryVerticalEnd}
+                label="Carta"
+                value={getItemName(displayCardsCatalog, draftProfile.selectedDisplayCardId)}
+                onClick={() => setPickerType("displayCard")}
+              />
+
               <div>
                 <label className="mb-1 block text-xs font-semibold text-white/40">
                   Nome de exibição
@@ -368,7 +411,7 @@ export default function ProfileHeader({
                       ).slice(0, 15),
                     }))
                   }
-                  className="login-username-value h-14 w-full border-x-0 border-b border-t-0 border-white/15 bg-transparent px-1 text-4xl leading-none text-white outline-none focus:border-[#5bc0ff]/65"
+                  className="login-username-value h-14 w-full border-x-0 border-b border-t-0 border-white/15 bg-transparent px-1 text-4xl leading-none text-white outline-none focus:border-[#ff713f]/70"
                 />
               </div>
 
@@ -394,7 +437,7 @@ export default function ProfileHeader({
                     }))
                   }
                   placeholder="Pronto para jogar"
-                  className="h-11 w-full border-x-0 border-b border-t-0 border-white/15 bg-transparent px-1 text-sm text-white outline-none placeholder:text-white/25 focus:border-[#5bc0ff]/65"
+                  className="h-11 w-full border-x-0 border-b border-t-0 border-white/15 bg-transparent px-1 text-sm text-white outline-none placeholder:text-white/25 focus:border-[#ff713f]/70"
                 />
               </div>
 
@@ -404,8 +447,10 @@ export default function ProfileHeader({
                 value={draftProfile.selectedStatusIcon}
                 onClick={() => setPickerType("statusIcon")}
               />
+              </div>
+            </div>
 
-              <div className="grid grid-cols-2 gap-2 pt-1">
+              <div className="profile-edit-footer grid shrink-0 grid-cols-2 gap-2 px-5 pb-5 pt-4">
                 <button
                   type="button"
                   onClick={cancelEditing}
@@ -423,7 +468,6 @@ export default function ProfileHeader({
                   {isSaving ? "Salvando..." : "Salvar"}
                 </button>
               </div>
-            </div>
           </div>
         )}
       </section>
@@ -434,6 +478,7 @@ export default function ProfileHeader({
           backgrounds={backgrounds}
           profilePics={profilePics}
           profilePicBorders={profilePicBorders}
+          displayCards={displayCardsCatalog}
           selectedId={
             pickerType === "background"
               ? draftProfile.selectedBackgroundId
@@ -441,11 +486,15 @@ export default function ProfileHeader({
                 ? draftProfile.selectedProfilePicId
                 : pickerType === "profilePicBorder"
                   ? draftProfile.selectedProfilePicBorderId
-                  : draftProfile.selectedStatusIcon
+                  : pickerType === "displayCard"
+                    ? draftProfile.selectedDisplayCardId
+                    : draftProfile.selectedStatusIcon
           }
           isUnlocked={isUnlocked}
           onClose={() => setPickerType(null)}
           onSelect={selectItem}
+          balance={user?.progression?.coins ?? 0}
+          onPurchase={purchaseItem}
           onSelectStatusIcon={(icon) => {
             setDraftProfile((current) => ({
               ...current,
@@ -468,11 +517,15 @@ function EditRow({ icon: Icon, label, value, onClick, disabled }) {
       className={`
         flex h-12 items-center justify-between border-b border-white/10
         bg-transparent px-1 text-left transition active:scale-[0.98]
-        ${disabled ? "opacity-50" : "hover:border-[#5bc0ff]/45"}
+        ${disabled ? "opacity-50" : "hover:border-[#ff713f]/50"}
       `}
     >
       <span className="flex items-center gap-3">
-        <Icon size={17} className="text-[#5bc0ff]/75" />
+        {typeof Icon === "string" ? (
+          <img src={Icon} alt="" className="h-[18px] w-[18px] object-contain" />
+        ) : (
+          <Icon size={17} className="text-[#ff8b58]/85" />
+        )}
         <span className="text-xs font-semibold text-white/40">{label}</span>
       </span>
 
@@ -488,19 +541,43 @@ function AssetPickerModal({
   backgrounds,
   profilePics,
   profilePicBorders,
+  displayCards,
   selectedId,
   isUnlocked,
   onClose,
   onSelect,
+  balance,
+  onPurchase,
   onSelectStatusIcon,
 }) {
   const isBackground = type === "background";
   const isProfilePic = type === "profilePic";
   const isProfilePicBorder = type === "profilePicBorder";
+  const isDisplayCard = type === "displayCard";
   const isStatusIcon = type === "statusIcon";
 
   const [selectedTheme, setSelectedTheme] = useState("all");
   const [showOnlyOwned, setShowOnlyOwned] = useState(true);
+  const [isThemeMenuOpen, setIsThemeMenuOpen] = useState(false);
+  const [previewItem, setPreviewItem] = useState(null);
+  const [purchaseTarget, setPurchaseTarget] = useState(null);
+  const [isPurchasing, setIsPurchasing] = useState(false);
+  const [purchaseError, setPurchaseError] = useState("");
+  const [confirmedItemId, setConfirmedItemId] = useState("");
+  const themeMenuRef = useRef(null);
+
+  useEffect(() => {
+    if (!isThemeMenuOpen) return undefined;
+
+    function closeThemeMenu(event) {
+      if (!themeMenuRef.current?.contains(event.target)) {
+        setIsThemeMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", closeThemeMenu);
+    return () => document.removeEventListener("pointerdown", closeThemeMenu);
+  }, [isThemeMenuOpen]);
 
   const title = isBackground
     ? "Escolher background"
@@ -508,12 +585,15 @@ function AssetPickerModal({
       ? "Escolher foto"
       : isProfilePicBorder
         ? "Escolher borda"
+        : isDisplayCard
+          ? "Escolher carta"
         : "Escolher ícone";
 
   const items = useMemo(() => {
     if (isBackground) return backgrounds;
     if (isProfilePic) return profilePics;
     if (isProfilePicBorder) return profilePicBorders;
+    if (isDisplayCard) return displayCards;
 
     return [];
   }, [
@@ -521,6 +601,8 @@ function AssetPickerModal({
     isBackground,
     isProfilePic,
     isProfilePicBorder,
+    isDisplayCard,
+    displayCards,
     profilePicBorders,
     profilePics,
   ]);
@@ -544,10 +626,10 @@ function AssetPickerModal({
 
   return (
     <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/60 px-5 pb-5 backdrop-blur-sm">
-      <div className="max-h-[82vh] w-full max-w-[420px] overflow-hidden border border-white/10 bg-[#210019]/95 p-5 shadow-[0_20px_60px_rgba(0,0,0,0.45)] backdrop-blur-3xl">
+      <div className="profile-edit-modal max-h-[82vh] w-full max-w-[420px] overflow-hidden p-5">
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-black text-white">{title}</h2>
+            <h2 className="font-idv-title text-2xl text-white">{title}</h2>
 
             {!isStatusIcon && (
               <p className="mt-1 text-xs font-semibold text-white/35">
@@ -559,7 +641,7 @@ function AssetPickerModal({
           <button
             type="button"
             onClick={onClose}
-            className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white"
+            className="profile-modal-close flex h-10 w-10 items-center justify-center text-white"
           >
             <X size={18} />
           </button>
@@ -567,33 +649,58 @@ function AssetPickerModal({
 
         {!isStatusIcon && (
           <div className="mb-4 flex flex-col gap-3">
-            <select
-              value={selectedTheme}
-              onChange={(event) => setSelectedTheme(event.target.value)}
-              className="h-11 border border-white/10 bg-[#210019] px-4 text-sm font-semibold text-white outline-none focus:border-[#5bc0ff]/45"
-            >
-              <option value="all">Todos os temas</option>
+            <div ref={themeMenuRef} className="profile-theme-select relative z-20">
+              <button
+                type="button"
+                onClick={() => setIsThemeMenuOpen((current) => !current)}
+                aria-haspopup="listbox"
+                aria-expanded={isThemeMenuOpen}
+                className={`profile-modal-select flex h-11 w-full items-center justify-between px-4 text-sm font-semibold text-white ${isThemeMenuOpen ? "profile-modal-select--open" : ""}`}
+              >
+                <span>{selectedTheme === "all" ? "Todos os temas" : selectedTheme.charAt(0).toUpperCase() + selectedTheme.slice(1)}</span>
+                <ChevronDown size={17} className={`text-[#ff8b58] transition-transform duration-200 ${isThemeMenuOpen ? "rotate-180" : ""}`} />
+              </button>
 
-              {themes
-                .filter((theme) => theme !== "all")
-                .map((theme) => (
-                  <option key={theme} value={theme}>
-                    {theme.charAt(0).toUpperCase() + theme.slice(1)}
-                  </option>
-                ))}
-            </select>
+              {isThemeMenuOpen && (
+                <div className="profile-theme-menu" role="listbox">
+                  {themes.map((theme) => {
+                    const isSelected = selectedTheme === theme;
+                    const label = theme === "all"
+                      ? "Todos os temas"
+                      : theme.charAt(0).toUpperCase() + theme.slice(1);
+
+                    return (
+                      <button
+                        key={theme}
+                        type="button"
+                        role="option"
+                        aria-selected={isSelected}
+                        onClick={() => {
+                          setSelectedTheme(theme);
+                          setIsThemeMenuOpen(false);
+                        }}
+                        className={`profile-theme-option ${isSelected ? "profile-theme-option--selected" : ""}`}
+                      >
+                        <span>{label}</span>
+                        {isSelected && <Check size={15} strokeWidth={2.5} />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
 
             <button
               type="button"
               onClick={() => setShowOnlyOwned((current) => !current)}
-              className="flex h-11 items-center justify-between rounded-full border border-white/10 bg-white/[0.04] px-4 text-sm font-bold text-white active:scale-[0.98]"
+              className="profile-modal-control flex h-11 items-center justify-between px-4 text-sm font-bold text-white active:scale-[0.98]"
             >
-              <span>Mostrar somente os meus</span>
+              <span>Inventário</span>
 
               <span
                 className={`
                   flex h-6 w-11 items-center rounded-full p-1 transition
-                  ${showOnlyOwned ? "bg-[#5bc0ff]" : "bg-white/10"}
+                  ${showOnlyOwned ? "bg-[#ff6235]" : "bg-white/10"}
                 `}
               >
                 <span
@@ -615,10 +722,10 @@ function AssetPickerModal({
                 type="button"
                 onClick={() => onSelectStatusIcon(icon)}
                 className={`
-                  flex h-16 items-center justify-center rounded-2xl border text-2xl transition active:scale-95
+                  profile-asset-option flex h-16 items-center justify-center border text-2xl transition active:scale-95
                   ${
                     selectedId === icon
-                      ? "border-[#5bc0ff] bg-[#5bc0ff]/15"
+                      ? "border-[#ff713f] bg-[#ff6235]/15"
                       : "border-white/10 bg-white/[0.05]"
                   }
                 `}
@@ -631,49 +738,55 @@ function AssetPickerModal({
           <div className="max-h-[48vh] overflow-y-auto pr-1">
             <div
               className={
-                isBackground
+                isBackground || isDisplayCard
                   ? "grid grid-cols-2 gap-3"
                   : "grid grid-cols-3 gap-3"
               }
             >
               {filteredItems.map((item) => {
-                const unlocked = isUnlocked(type, item.id);
                 const selected = selectedId === item.id;
 
                 return (
                   <button
                     key={item.id}
                     type="button"
-                    disabled={!unlocked}
-                    onClick={() => onSelect(type, item.id)}
+                    onClick={() => {
+                      setPreviewItem(item);
+                      setConfirmedItemId("");
+                    }}
                     className={`
-                      relative overflow-hidden rounded-2xl border transition active:scale-95
-                      ${selected ? "border-[#5bc0ff]" : "border-white/10"}
-                      ${!unlocked ? "opacity-35 grayscale" : ""}
-                      h-24
+                      profile-asset-option relative h-24 overflow-hidden border transition active:scale-95
+                      ${selected ? "border-[#ff713f]" : "border-white/10"}
                     `}
                   >
-                    <img
-                      src={item.src}
-                      alt={item.name}
-                      className="h-full w-full object-cover"
-                    />
+                    {isDisplayCard ? (
+                      <div className={`display-card-preview ${item.previewClassName} h-full w-full`}>
+                        {item.hasShine && <span className="display-card-preview-shine" />}
+                      </div>
+                    ) : (
+                      <img
+                        src={item.src}
+                        alt={item.name}
+                        className="h-full w-full object-cover"
+                      />
+                    )}
 
-                    <div className="absolute bottom-0 left-0 right-0 bg-black/45 px-2 py-1 text-[10px] font-black text-white">
-                      {item.name}
+                    <div className="absolute bottom-0 left-0 right-0 flex items-center justify-between gap-2 bg-black/60 px-2 py-1 text-[10px] font-black text-white backdrop-blur-sm">
+                      <span className="truncate">{item.name}</span>
+                      {item.price?.amount != null && (
+                        <span className="inline-flex shrink-0 items-center gap-1 text-[#ffb071]">
+                          <img src={coinIcon} alt="" className="h-3.5 w-3.5 object-contain" />
+                          {item.price.amount}
+                        </span>
+                      )}
                     </div>
 
                     {selected && (
-                      <div className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-[#5bc0ff] text-[#210019]">
+                      <div className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-[#ff6235] text-[#210019]">
                         <Check size={14} strokeWidth={3} />
                       </div>
                     )}
 
-                    {!unlocked && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/45 text-xs font-black text-white">
-                        Bloqueado
-                      </div>
-                    )}
                   </button>
                 );
               })}
@@ -686,7 +799,106 @@ function AssetPickerModal({
             )}
           </div>
         )}
+
       </div>
+
+        {previewItem && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 px-5 py-6 backdrop-blur-sm">
+            <div className="profile-edit-modal max-h-[calc(100vh-3rem)] w-full max-w-[420px] overflow-y-auto p-5">
+              <div className="mb-4 flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="font-idv-title text-2xl text-white">{previewItem.name}</h3>
+                  <p className="mt-1 text-xs font-semibold text-white/45">{previewItem.description}</p>
+                </div>
+                <button type="button" onClick={() => setPreviewItem(null)} className="profile-modal-close flex h-9 w-9 shrink-0 items-center justify-center text-white" aria-label="Fechar visualização">
+                  <X size={17} />
+                </button>
+              </div>
+
+              <div className="profile-item-large-preview mb-4 h-64 overflow-hidden border border-white/10">
+                {isDisplayCard ? (
+                  <div className={`display-card-preview ${previewItem.previewClassName} h-full w-full`}>
+                    {previewItem.hasShine && <span className="profile-sticker-shine absolute -inset-y-10 left-0 w-[78%]" />}
+                  </div>
+                ) : (
+                  <img src={previewItem.src} alt={previewItem.name} className={`h-full w-full ${isBackground ? "object-cover" : "object-contain"}`} />
+                )}
+              </div>
+
+              {isUnlocked(type, previewItem.id) ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onSelect(type, previewItem.id);
+                    setConfirmedItemId(previewItem.id);
+                    window.setTimeout(() => setPreviewItem(null), 700);
+                  }}
+                  className="register-paper-action flex h-12 w-full items-center justify-center gap-2 text-sm font-black"
+                >
+                  {confirmedItemId === previewItem.id ? <><Check size={17} strokeWidth={3} /> selecionado</> : selectedId === previewItem.id ? <><Check size={17} strokeWidth={3} /> em uso</> : "usar"}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPurchaseError("");
+                    setPurchaseTarget(previewItem);
+                  }}
+                  className="register-paper-action flex h-12 w-full items-center justify-center gap-2 text-sm font-black"
+                >
+                  comprar
+                  <span className="inline-flex items-center gap-1">
+                    <img src={coinIcon} alt="" className="h-4 w-4 object-contain" />
+                    {previewItem.price?.amount ?? 0}
+                  </span>
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {purchaseTarget && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/75 px-5 py-6 backdrop-blur-sm">
+            <div className="profile-edit-modal w-full max-w-[420px] p-5 text-white">
+              <h3 className="font-idv-title text-2xl">Confirmar compra?</h3>
+              <div className="my-5 grid grid-cols-2 gap-2">
+                <div className="profile-modal-control p-3">
+                  <p className="text-xs font-semibold text-white/40">Saldo atual</p>
+                  <p className="mt-1 flex items-center gap-1.5 text-xl font-black"><img src={coinIcon} alt="" className="h-5 w-5" />{balance}c</p>
+                </div>
+                <div className="profile-modal-control p-3">
+                  <p className="text-xs font-semibold text-white/40">Preço</p>
+                  <p className="mt-1 flex items-center gap-1.5 text-xl font-black text-[#ff9a61]"><img src={coinIcon} alt="" className="h-5 w-5" />{purchaseTarget.price?.amount ?? 0}c</p>
+                </div>
+              </div>
+
+              {purchaseError && <p className="mb-3 text-center text-sm font-bold text-red-300">{purchaseError}</p>}
+
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button" disabled={isPurchasing} onClick={() => setPurchaseTarget(null)} className="register-outline-action h-11 text-sm disabled:opacity-50">cancelar</button>
+                <button
+                  type="button"
+                  disabled={isPurchasing}
+                  onClick={async () => {
+                    try {
+                      setIsPurchasing(true);
+                      setPurchaseError("");
+                      await onPurchase(type, purchaseTarget.id);
+                      setPurchaseTarget(null);
+                    } catch (error) {
+                      setPurchaseError(error?.message || "Não foi possível concluir a compra.");
+                    } finally {
+                      setIsPurchasing(false);
+                    }
+                  }}
+                  className="register-paper-action h-11 text-sm disabled:opacity-50"
+                >
+                  {isPurchasing ? "comprando..." : "comprar"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
     </div>
   );
 }

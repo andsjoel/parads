@@ -6,6 +6,7 @@ import {
   ChevronRight,
   LayoutGrid,
   LogOut,
+  Store,
   X,
 } from "lucide-react";
 import { GiVolleyballBall } from "react-icons/gi";
@@ -90,8 +91,8 @@ export default function BottomNav() {
             absolute inset-0
 
             bg-gradient-to-t
-            from-[#210019]/95
-            via-[#210019]/45
+            from-[#18050a]/95
+            via-[#18050a]/45
             to-transparent
           "
         />
@@ -100,10 +101,10 @@ export default function BottomNav() {
   className="app-bottom-nav
     pointer-events-auto
     relative z-10
-    flex w-[min(88vw,420px)] items-center justify-center gap-2
-    px-5 pb-[calc(10px+env(safe-area-inset-bottom))] pt-6
-    shadow-[0_14px_40px_rgba(0,0,0,0.32)]
-    backdrop-blur-3xl
+    flex w-full items-center justify-center gap-3
+    px-5 pb-[calc(10px+env(safe-area-inset-bottom))] pt-3
+    shadow-[0_-10px_35px_rgba(0,0,0,0.25)]
+    backdrop-blur-[22px]
     transition-all duration-300
   "
 >
@@ -120,11 +121,11 @@ export default function BottomNav() {
               }}
               className={({ isActive }) =>
                 `
-                  flex h-11 w-11 items-center justify-center rounded-full
+                  app-nav-item flex h-11 w-11 items-center justify-center
                   transition-all duration-300 active:scale-95
                   ${
                     isActive
-                      ? "bg-[#5bc0ff] text-[#210019] shadow-[0_0_22px_rgba(91,192,255,0.38)]"
+                      ? "app-nav-item--active"
                       : "text-stone-300 hover:bg-white/[0.07] hover:text-white"
                   }
                 `
@@ -155,9 +156,21 @@ export default function BottomNav() {
         <div
           className={`
             flex overflow-hidden rounded-full transition-all duration-300
-            ${isExpanded ? "w-[92px] opacity-100" : "w-0 opacity-0"}
+            ${isExpanded ? "w-[138px] opacity-100" : "w-0 opacity-0"}
           `}
         >
+          <NavLink
+            to="/shop"
+            onClick={() => {
+              setIsExpanded(true);
+              rotateBackground();
+            }}
+            className={({ isActive }) => `app-nav-item flex h-11 w-11 shrink-0 items-center justify-center transition-all duration-300 active:scale-95 ${isActive ? "app-nav-item--active" : "text-stone-300 hover:bg-white/[0.07] hover:text-white"}`}
+            aria-label="Loja"
+          >
+            <Store size={18} strokeWidth={2.3} />
+          </NavLink>
+
           <NavLink
             to="/admin"
             onClick={() => {
@@ -166,11 +179,11 @@ export default function BottomNav() {
             }}
             className={({ isActive }) =>
               `
-                flex h-11 w-11 shrink-0 items-center justify-center rounded-full
+                app-nav-item flex h-11 w-11 shrink-0 items-center justify-center
                 transition-all duration-300 active:scale-95
                 ${
                     isActive
-                    ? "bg-[#5bc0ff] text-[#210019] shadow-[0_0_22px_rgba(91,192,255,0.38)]"
+                    ? "app-nav-item--active"
                     : "text-stone-300 hover:bg-white/[0.07] hover:text-white"
                 }
               `
@@ -197,22 +210,29 @@ export default function BottomNav() {
       </nav>
           
       {showLogoutModal && (
-        <div className="pointer-events-auto fixed inset-0 z-[90] flex items-end justify-center bg-black/60 px-5 pb-5 backdrop-blur-sm">
-          <div className="w-full max-w-[420px] border border-white/10 bg-[#210019]/95 p-5 shadow-[0_20px_60px_rgba(0,0,0,0.45)] backdrop-blur-3xl">
+        <div className="pointer-events-auto fixed inset-0 z-[90] flex items-end justify-center bg-black/70 px-5 pb-5 backdrop-blur-sm">
+          <div className="profile-edit-modal w-full max-w-[420px] p-5 text-white">
             <div className="mb-5 flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-lg font-black text-white">Sair do app?</h2>
+              <div className="flex gap-3">
+                <div className="admin-delete-icon flex h-11 w-11 shrink-0 items-center justify-center">
+                  <LogOut size={20} />
+                </div>
+                <div>
+                <h2 className="font-idv-title text-2xl">Sair do app?</h2>
                 <p className="mt-1 text-sm text-app-muted">
                   Você vai precisar entrar novamente para acessar sua conta.
                 </p>
+                </div>
               </div>
 
               <button
                 type="button"
                 onClick={() => setShowLogoutModal(false)}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-stone-300"
+                disabled={isLoggingOut}
+                className="profile-modal-close flex h-9 w-9 shrink-0 items-center justify-center text-white/70 disabled:opacity-50"
+                aria-label="Fechar"
               >
-                <X size={18} />
+                <X size={17} />
               </button>
             </div>
 
@@ -220,18 +240,20 @@ export default function BottomNav() {
               <button
                 type="button"
                 onClick={() => setShowLogoutModal(false)}
-                className="h-12 rounded-full border border-white/10 bg-white/[0.06] text-sm font-black text-white active:scale-[0.98]"
+                disabled={isLoggingOut}
+                className="register-outline-action h-11 text-sm disabled:opacity-50"
               >
-                Cancelar
+                cancelar
               </button>
 
               <button
                 type="button"
                 onClick={handleLogout}
                 disabled={isLoggingOut}
-                className="h-12 rounded-full bg-app-danger text-sm font-black text-white shadow-[0_10px_30px_rgba(251,113,133,0.24)] active:scale-[0.98] disabled:opacity-50"
+                className="admin-delete-action flex h-11 items-center justify-center gap-2 text-sm disabled:opacity-50"
               >
-                {isLoggingOut ? "Saindo..." : "Sair"}
+                <LogOut size={16} />
+                {isLoggingOut ? "saindo..." : "sair"}
               </button>
             </div>
           </div>
