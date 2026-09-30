@@ -723,7 +723,6 @@
 }
 
 .profile-stats {
-  border-top: 1px solid rgba(255, 111, 63, 0.2);
   background: rgba(19, 5, 10, 0.58);
   backdrop-filter: blur(12px);
 }
@@ -850,6 +849,118 @@
 .profile-stat-item:nth-child(even):hover {
   transform: translateY(-3px) rotate(1deg);
 }
+
+.profile-stat-item--connected {
+  transform: translateY(2px);
+}
+
+.profile-stat-item--connected:hover {
+  transform: translateY(2px);
+}
+
+.profile-mission-alert {
+  position: absolute;
+  z-index: 3;
+  top: -5px;
+  right: -3px;
+  display: grid;
+  width: 17px;
+  height: 17px;
+  place-items: center;
+  border: 2px solid #1c060b;
+  border-radius: 999px;
+  background: #b8efc3;
+  color: #14311d;
+  font-size: 10px;
+  font-weight: 900;
+  box-shadow: 0 0 12px rgba(184, 239, 195, 0.5);
+}
+
+.profile-mission-panel {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  --mission-shape: polygon(1% 3%, 97% 0, 100% 7%, 98% 96%, 91% 100%, 2% 97%, 0 88%);
+}
+
+.profile-mission-panel::before,
+.profile-mission-panel::after {
+  position: absolute;
+  content: "";
+  clip-path: var(--mission-shape);
+}
+
+.profile-mission-panel--connected {
+  --mission-shape: polygon(1% 0, 97% 0, 100% 7%, 98% 96%, 91% 100%, 2% 97%, 0 88%);
+}
+
+.profile-mission-panel--connected::before {
+  background: linear-gradient(90deg, rgba(255, 99, 53, 0.78), rgba(255, 126, 65, 0.62));
+}
+
+.profile-mission-panel::before {
+  z-index: -2;
+  inset: 0;
+  background: rgba(255, 99, 53, 0.78);
+}
+
+.profile-mission-panel::after {
+  z-index: -1;
+  inset: 1.5px;
+  background: rgba(28, 6, 11, 0.97);
+}
+
+.profile-mission-list {
+  scrollbar-color: rgba(255, 113, 63, 0.65) rgba(255, 255, 255, 0.04);
+  scrollbar-width: thin;
+}
+
+.profile-mission-row {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.035);
+  color: rgba(255, 255, 255, 0.34);
+  clip-path: polygon(1% 5%, 98% 0, 100% 88%, 94% 100%, 0 94%);
+}
+
+.profile-mission-row--completed {
+  border-color: rgba(184, 239, 195, 0.2);
+  background: rgba(92, 163, 107, 0.14);
+  color: #c9f4d1;
+}
+
+.profile-mission-row--claimed {
+  background: rgba(92, 163, 107, 0.08);
+  color: rgba(201, 244, 209, 0.62);
+}
+
+.profile-mission-claim {
+  color: #17321e;
+  background: #b8efc3;
+  clip-path: polygon(4% 5%, 95% 0, 100% 78%, 92% 100%, 2% 92%, 0 20%);
+  transition: transform 180ms ease, filter 180ms ease;
+}
+
+.profile-mission-more {
+  border: 1px solid rgba(255, 113, 63, 0.28);
+  color: rgba(255, 255, 255, 0.68);
+  background: rgba(255, 255, 255, 0.035);
+  clip-path: polygon(3% 7%, 96% 0, 100% 82%, 91% 100%, 0 92%);
+  transition: border-color 180ms ease, color 180ms ease, transform 180ms ease;
+}
+
+.profile-mission-more:active {
+  transform: scale(0.97);
+}
+
+.profile-mission-claim:not(:disabled):active {
+  transform: scale(0.97);
+}
+
 
 .app-bottom-nav {
   isolation: isolate;
@@ -1712,6 +1823,10 @@
   box-shadow: 0 0 0 3px rgba(255, 74, 42, 0.1);
 }
 
+.admin-select--large .admin-select-trigger {
+  height: 48px;
+}
+
 .admin-select-menu {
   position: absolute;
   top: calc(100% + 6px);
@@ -1754,11 +1869,25 @@
 /* Matches IDV */
 .matches-page {
   position: relative;
+  isolation: isolate;
   background-color: #18060d;
+}
+
+.matches-page::before {
+  position: fixed;
+  z-index: -1;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100vh;
+  height: 100lvh;
+  content: "";
+  pointer-events: none;
+  background-color: #18060d;
+  background-image: var(--matches-background);
   background-position: center;
   background-repeat: no-repeat;
   background-size: cover;
-  background-attachment: fixed;
 }
 
 .matches-page .orbit-loader > span {
@@ -1809,19 +1938,61 @@
 }
 
 .match-panel--setters {
-  border-color: rgba(255, 164, 64, 0.3);
-  background:
-    linear-gradient(135deg, rgba(255, 157, 52, 0.12), transparent 42%),
-    rgba(34, 14, 7, 0.82);
+  position: relative;
+  isolation: isolate;
+  border-color: transparent;
+  background: transparent;
   box-shadow: 0 14px 40px rgba(0, 0, 0, 0.27), 0 0 24px rgba(255, 148, 46, 0.06);
 }
 
 .match-panel--players {
-  border-color: rgba(255, 91, 111, 0.26);
-  background:
-    linear-gradient(135deg, rgba(255, 73, 96, 0.1), transparent 42%),
-    rgba(31, 7, 18, 0.84);
+  position: relative;
+  isolation: isolate;
+  padding-bottom: 1.75rem;
+  border-color: transparent;
+  background: transparent;
   box-shadow: 0 14px 40px rgba(0, 0, 0, 0.27), 0 0 24px rgba(255, 73, 96, 0.05);
+}
+
+.match-panel--setters::before,
+.match-panel--setters::after,
+.match-panel--players::before,
+.match-panel--players::after {
+  position: absolute;
+  content: "";
+  clip-path: polygon(2% 1%, 97% 0, 100% 7%, 98% 93%, 94% 100%, 3% 98%, 0 90%, 1% 7%);
+}
+
+.match-panel--setters::before,
+.match-panel--players::before {
+  z-index: -2;
+  inset: 0;
+}
+
+.match-panel--setters::after,
+.match-panel--players::after {
+  z-index: -1;
+  inset: 1.5px;
+}
+
+.match-panel--setters::before {
+  background: rgba(255, 145, 43, 0.9);
+}
+
+.match-panel--setters::after {
+  background:
+    linear-gradient(135deg, rgba(255, 157, 52, 0.12), transparent 42%),
+    rgba(34, 14, 7, 0.96);
+}
+
+.match-panel--players::before {
+  background: rgba(255, 250, 240, 0.82);
+}
+
+.match-panel--players::after {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.06), transparent 42%),
+    rgba(31, 7, 18, 0.96);
 }
 
 .match-panel--setters > div:first-child > div:first-child > div:first-child {
@@ -1850,9 +2021,22 @@
   transition: border-color 180ms ease, background 180ms ease;
 }
 
-.match-player-row:hover {
-  border-color: rgba(255, 113, 63, 0.38);
-  background: rgba(255, 98, 53, 0.06);
+.matches-page .profile-player-mini-name {
+  width: 96%;
+  transform: scaleX(1.04);
+  transform-origin: left center;
+}
+
+.matches-page--presence .profile-player-mini-background {
+  opacity: 0.62;
+}
+
+.matches-page--presence .profile-player-mini-name-shade {
+  background: linear-gradient(90deg, #18050a 0%, rgba(24, 5, 10, 0.9) 36%, rgba(24, 5, 10, 0.38) 66%, transparent 100%);
+}
+
+.matches-page--presence .profile-player-mini-edge-shade {
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.18), transparent 48%);
 }
 
 .match-action {
@@ -1900,10 +2084,40 @@
   transform: translateY(-50%);
 }
 
+.matches-waiting-match-message {
+  position: absolute;
+  z-index: 2;
+  top: 36%;
+  right: max(24px, calc(50% - 185px));
+  display: flex;
+  width: min(330px, calc(100% - 48px));
+  flex-direction: column;
+  margin: 0;
+  color: #fff5ec;
+  font-family: "KG Blank Space Sketch", "Trebuchet MS", sans-serif;
+  font-size: 3rem;
+  font-weight: 400;
+  line-height: 0.92;
+  letter-spacing: 0;
+  text-align: right;
+  text-shadow: 0 4px 20px rgba(0, 0, 0, 0.48);
+  transform: translateY(-50%);
+}
+
+.matches-waiting-match-message span {
+  white-space: nowrap;
+}
+
 @media (max-width: 380px) {
   .matches-waiting-message {
     left: 24px;
     width: 165px;
+    font-size: 2.65rem;
+  }
+
+  .matches-waiting-match-message {
+    right: 24px;
+    width: calc(100% - 48px);
     font-size: 2.65rem;
   }
 }
@@ -1985,6 +2199,184 @@
   background: linear-gradient(145deg, rgba(255, 73, 96, 0.1), transparent 44%), rgba(31, 7, 18, 0.84);
 }
 
+.admin-volley-team {
+  position: relative;
+  isolation: isolate;
+  border-color: transparent;
+  background: transparent;
+}
+
+.admin-volley-team::before,
+.admin-volley-team::after {
+  position: absolute;
+  content: "";
+  clip-path: polygon(2% 1%, 97% 0, 100% 7%, 98% 93%, 94% 100%, 3% 98%, 0 90%, 1% 7%);
+}
+
+.volley-team-frame {
+  position: relative;
+  isolation: isolate;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.28), 0 0 22px var(--team-glow);
+}
+
+.volley-team-frame::before,
+.volley-team-frame::after {
+  position: absolute;
+  content: "";
+  clip-path: polygon(2% 1%, 97% 0, 100% 7%, 98% 93%, 94% 100%, 3% 98%, 0 90%, 1% 7%);
+}
+
+.volley-team-frame::before {
+  z-index: -2;
+  inset: 0;
+  background: var(--team-border);
+}
+
+.volley-team-frame::after {
+  z-index: -1;
+  inset: 1.5px;
+  background: linear-gradient(145deg, var(--team-tint), transparent 44%), rgba(22, 4, 9, 0.96);
+}
+
+.volley-team-frame--orange {
+  --team-border: rgba(255, 138, 46, 0.9);
+  --team-tint: rgba(255, 138, 46, 0.13);
+  --team-glow: rgba(255, 138, 46, 0.09);
+}
+
+.volley-team-frame--cyan {
+  --team-border: rgba(73, 201, 210, 0.82);
+  --team-tint: rgba(73, 201, 210, 0.11);
+  --team-glow: rgba(73, 201, 210, 0.08);
+}
+
+.volley-team-frame--green {
+  --team-border: rgba(82, 224, 151, 0.82);
+  --team-tint: rgba(82, 224, 151, 0.11);
+  --team-glow: rgba(82, 224, 151, 0.08);
+}
+
+.volley-team-frame--pink {
+  --team-border: rgba(255, 50, 153, 0.82);
+  --team-tint: rgba(255, 50, 153, 0.11);
+  --team-glow: rgba(255, 50, 153, 0.08);
+}
+
+.match-court-teams {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  padding: 1.5px;
+  clip-path: polygon(3% 0, 96% 1%, 100% 8%, 99% 91%, 96% 100%, 3% 99%, 0 92%, 1% 8%);
+}
+
+.match-court-teams::before,
+.match-court-teams::after {
+  position: absolute;
+  content: "";
+  pointer-events: none;
+  clip-path: inherit;
+}
+
+.match-court-teams::before {
+  z-index: -2;
+  inset: 0;
+  background: linear-gradient(90deg, #ff8a2e 0 50%, #49c9d2 50% 100%);
+}
+
+.match-court-teams::after {
+  z-index: -1;
+  inset: 1.5px;
+  background: rgba(18, 3, 8, 0.97);
+}
+
+.match-court-teams > .match-court-team-column:first-child::after {
+  position: absolute;
+  z-index: 3;
+  top: 4px;
+  bottom: 4px;
+  right: 0;
+  border-left: 1px dashed rgba(255, 255, 255, 0.3);
+  content: "";
+  pointer-events: none;
+}
+
+.match-court-team-column {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  background: rgba(10, 2, 5, 0.35);
+}
+
+.match-court-team-column--orange {
+  border: 0;
+  color: #ff8a2e;
+  background: linear-gradient(135deg, rgba(255, 138, 46, 0.1), rgba(10, 2, 5, 0.42));
+}
+
+.match-court-team-column--cyan {
+  border: 0;
+  color: #49c9d2;
+  background: linear-gradient(225deg, rgba(73, 201, 210, 0.1), rgba(10, 2, 5, 0.42));
+}
+
+.match-court-team-header {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+}
+
+.match-court-team-column .match-player-row,
+.match-court-empty {
+  border-radius: 5px;
+  clip-path: polygon(1% 2%, 98% 0, 100% 14%, 98% 91%, 94% 100%, 2% 96%, 0 84%, 1% 10%);
+}
+
+.match-court-team-column--orange .match-player-row {
+  border-color: rgba(255, 138, 46, 0.42);
+  background: rgba(35, 10, 5, 0.7);
+}
+
+.match-court-team-column--cyan .match-player-row {
+  border-color: rgba(73, 201, 210, 0.4);
+  background: rgba(5, 25, 29, 0.7);
+}
+
+.match-court-empty {
+  border: 1px dashed rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.match-court-team-column .match-player-row.admin-volley-player--setter {
+  border-color: rgba(82, 224, 151, 0.68);
+  background: linear-gradient(90deg, rgba(28, 126, 79, 0.25), transparent 82%);
+  box-shadow: inset 4px 0 0 #52e097;
+}
+
+.match-court-team-column .match-player-row.admin-volley-player--woman {
+  border-color: rgba(255, 50, 153, 0.72);
+  background: linear-gradient(90deg, rgba(184, 18, 103, 0.27), transparent 82%);
+  box-shadow: inset 4px 0 0 #ff3299;
+}
+
+.match-court-team-column .match-player-row.admin-volley-player--setter-woman {
+  border-color: rgba(255, 50, 153, 0.68);
+  background: linear-gradient(90deg, rgba(28, 126, 79, 0.27), rgba(184, 18, 103, 0.24));
+  box-shadow: inset 4px 0 0 #52e097, inset -4px 0 0 #ff3299;
+}
+
+.admin-volley-team::before {
+  z-index: -2;
+  inset: 0;
+  background: rgba(255, 250, 240, 0.72);
+}
+
+.admin-volley-team::after {
+  z-index: -1;
+  inset: 1.5px;
+  background: linear-gradient(145deg, rgba(255, 73, 96, 0.1), transparent 44%), rgba(31, 7, 18, 0.96);
+}
+
 .admin-volley-rules,
 .admin-volley-arrivals {
   border-color: rgba(111, 186, 174, 0.26);
@@ -1996,16 +2388,89 @@
   background: linear-gradient(145deg, rgba(182, 79, 153, 0.09), transparent 44%), rgba(27, 8, 24, 0.84);
 }
 
-.admin-volley-player,
-.admin-volley-slot {
+.admin-volley-page--matches > section > .admin-volley-summary {
+  order: 1;
+}
+
+.admin-volley-page--matches > section > .admin-volley-arrivals {
+  order: 2;
+}
+
+.admin-volley-page--matches > section > .admin-volley-rules {
+  order: 3;
+}
+
+.admin-volley-page--matches > section > .admin-volley-team,
+.admin-volley-page--matches > section > .admin-volley-teams-grid {
+  order: 4;
+}
+
+.admin-volley-page--matches > section > .admin-volley-ghost {
+  order: 5;
+}
+
+.admin-volley-player {
   border-radius: 5px;
   background: rgba(10, 2, 5, 0.46);
   clip-path: polygon(1% 2%, 98% 0, 100% 14%, 98% 91%, 94% 100%, 2% 96%, 0 84%, 1% 10%);
 }
 
-.admin-volley-player:hover {
-  border-color: rgba(255, 113, 63, 0.4);
-  background: rgba(255, 98, 53, 0.07);
+.admin-arrival-search-results {
+  border: 1px solid rgba(255, 113, 63, 0.24);
+  background: rgba(24, 5, 10, 0.96);
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.28);
+  clip-path: polygon(1% 3%, 98% 0, 100% 90%, 94% 100%, 0 96%);
+}
+
+.admin-volley-player--setter {
+  border-color: rgba(82, 224, 151, 0.68);
+  background: linear-gradient(90deg, rgba(28, 126, 79, 0.32), rgba(25, 92, 61, 0.12));
+  box-shadow: inset 3px 0 0 #52e097, 0 0 16px rgba(82, 224, 151, 0.08);
+}
+
+.admin-volley-player--woman {
+  border-color: rgba(255, 50, 153, 0.72);
+  background: linear-gradient(90deg, rgba(184, 18, 103, 0.34), rgba(105, 8, 58, 0.12));
+  box-shadow: inset 3px 0 0 #ff3299, 0 0 16px rgba(255, 50, 153, 0.09);
+}
+
+.admin-volley-player--setter-woman {
+  border-color: rgba(255, 50, 153, 0.68);
+  background: linear-gradient(100deg, rgba(28, 126, 79, 0.38), rgba(38, 115, 76, 0.2) 42%, rgba(184, 18, 103, 0.34));
+  box-shadow: inset 3px 0 0 #52e097, inset -3px 0 0 #ff3299, 0 0 16px rgba(255, 50, 153, 0.08);
+}
+
+.admin-volley-player--selected {
+  border-color: #ff713f;
+  box-shadow: inset 0 0 0 1px rgba(255, 113, 63, 0.72), 0 0 20px rgba(255, 113, 63, 0.2);
+}
+
+@keyframes player-delete-warning-in {
+  0% {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  10% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  72% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+.player-delete-warning {
+  text-shadow: 0 3px 12px rgba(0, 0, 0, 0.9);
+  animation: player-delete-warning-in 2s ease-out both;
+}
+
+.admin-arrival-search-results button + button {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .admin-volley-page input {

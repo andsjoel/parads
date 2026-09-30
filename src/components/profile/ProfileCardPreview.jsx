@@ -1,4 +1,6 @@
 /* eslint-disable react/prop-types */
+import { useEffect } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 
 import ProfileHeader from "./ProfileHeader";
@@ -23,33 +25,35 @@ function getDisplayName(person, bundle) {
 export function PlayerMiniCard({ person, profileBundle, onOpen, onRemove }) {
   const profile = profileBundle?.user?.profile || {};
   const { backgroundUrl, profilePicUrl, profilePicBorderUrl } =
-    getProfileAssetUrls(profile);
+    getProfileAssetUrls(profile, { staticPreview: true });
   const displayName = getDisplayName(person, profileBundle);
 
   return (
-    <div className="group relative h-11 min-w-0 flex-1 overflow-visible bg-transparent transition">
+    <div className="profile-player-mini-card group relative h-11 min-w-0 flex-1 overflow-visible bg-transparent transition">
       {backgroundUrl && (
         <img
           src={backgroundUrl}
           alt=""
-          className="absolute inset-0 h-full w-full rounded-2xl object-cover opacity-35"
+          className="profile-player-mini-background absolute inset-0 h-full w-full rounded-2xl object-cover opacity-35"
         />
       )}
 
-      <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-[#18050a] via-[#18050a]/82 to-transparent" />
-      <div className="absolute inset-0 rounded-2xl bg-gradient-to-l from-black/15 via-transparent to-black/20" />
+      <div className="profile-player-mini-name-shade absolute inset-0 rounded-2xl bg-gradient-to-r from-[#18050a] via-[#18050a]/82 to-transparent" />
+      <div className="profile-player-mini-edge-shade absolute inset-0 rounded-2xl bg-gradient-to-l from-black/15 via-transparent to-black/20" />
 
       <button
         type="button"
         onClick={onOpen}
-        className={`relative flex h-11 w-full min-w-0 items-center gap-3 px-2.5 text-left transition active:scale-[0.99] ${
+        className={`relative flex h-11 w-full min-w-0 items-center gap-3 overflow-visible px-2.5 text-left transition active:scale-[0.99] ${
           onRemove ? "pr-9" : ""
         }`}
       >
-        <div className="relative h-11 w-11 shrink-0">
+        <div className="relative z-10 h-11 w-11 shrink-0 overflow-visible">
           <img
             src={profilePicUrl}
             alt={displayName}
+            loading="lazy"
+            decoding="async"
             className="h-full w-full object-cover ring-2 ring-white/10"
           />
 
@@ -57,13 +61,15 @@ export function PlayerMiniCard({ person, profileBundle, onOpen, onRemove }) {
             <img
               src={profilePicBorderUrl}
               alt=""
-              className="pointer-events-none absolute inset-0 h-full w-full scale-[1.21] object-contain"
+              loading="lazy"
+              decoding="async"
+              className="pointer-events-none absolute inset-0 z-20 h-full w-full scale-[1.21] object-contain"
             />
           )}
         </div>
 
         <div className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-black leading-none text-[#fffaf0]">
+          <span className="profile-player-mini-name block truncate text-sm font-black leading-none text-[#fffaf0]">
             {displayName}
           </span>
         </div>
@@ -99,7 +105,33 @@ export function ProfileStickerModal({
     canUseSelectedCard ? selectedCardId : DEFAULT_DISPLAY_CARD_ID,
   );
 
-  return (
+  useEffect(() => {
+    const scrollY = window.scrollY;
+    const previousBody = {
+      position: document.body.style.position,
+      top: document.body.style.top,
+      width: document.body.style.width,
+      overflow: document.body.style.overflow,
+    };
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = "100%";
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.documentElement.style.overflow = previousHtmlOverflow;
+      document.body.style.position = previousBody.position;
+      document.body.style.top = previousBody.top;
+      document.body.style.width = previousBody.width;
+      document.body.style.overflow = previousBody.overflow;
+      window.scrollTo(0, scrollY);
+    };
+  }, []);
+
+  return createPortal(
     <div className="fixed inset-0 z-[95] flex items-end justify-center bg-black/75 px-4 pb-4 pt-8 backdrop-blur-sm">
       <article className={`profile-sticker-card profile-edit-modal ${displayCard.cardClassName} relative max-h-[92vh] w-full max-w-[430px] overflow-hidden p-3`}>
         {displayCard.hasShine && backgroundUrl && (
@@ -150,6 +182,7 @@ export function ProfileStickerModal({
           </div>
         )}
       </article>
-    </div>
+    </div>,
+    document.body,
   );
 }

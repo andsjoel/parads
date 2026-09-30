@@ -9,15 +9,76 @@ import {
   query,
   runTransaction,
   serverTimestamp,
-  updateDoc,
   where,
   writeBatch,
 } from "firebase/firestore";
 
 import { db } from "../firebase/firebase";
+import { sequenceMilestones } from "../data/profileMissions";
+import { profilePicsCatalog } from "../data/profilePicsCatalog";
+import { profilePicBordersCatalog } from "../data/profilePicBordersCatalog";
+import { profileBackgroundsCatalog } from "../data/profileBackgroundsCatalog";
+import { DEFAULT_DISPLAY_CARD_ID } from "../data/displayCardsCatalog";
 
 const COLLECTION_NAME = "volley_lists";
 const TEAM_SIZE = 6;
+const mockNames = [
+  "Alex", "Bia", "Caio", "Dani", "Eli", "Fê", "Gabi", "Hugo",
+  "Iara", "João", "Katia", "Leo", "Maya", "Nando", "Olivia", "Pietro",
+  "Rafa", "Sara", "Theo", "Vivi", "Will", "Yasmin", "Zeca", "Aline",
+  "Bruno", "Clara", "Diego", "Eva", "Felipe", "Luna",
+];
+
+function pickMockAsset(catalog, index, offset = 0) {
+  return catalog[(index + offset) % catalog.length]?.id || null;
+}
+
+function buildMockProfileBundle(player, index) {
+  const selectedProfilePicId = pickMockAsset(profilePicsCatalog, index);
+  const selectedProfilePicBorderId = pickMockAsset(
+    profilePicBordersCatalog,
+    index,
+    3,
+  );
+  const selectedBackgroundId = pickMockAsset(
+    profileBackgroundsCatalog,
+    index,
+    5,
+  );
+
+  return {
+    user: {
+      id: player.userId,
+      fullName: player.displayName,
+      username: `teste${String(index + 1).padStart(2, "0")}`,
+      role: "guest",
+      sex: player.sex,
+      profile: {
+        displayName: player.displayName,
+        statusMessage: index % 3 === 0 ? "pronto pra quadra" : "hoje tem vôlei",
+        selectedProfilePicId,
+        selectedProfilePicBorderId,
+        selectedBackgroundId,
+        selectedDisplayCardId: DEFAULT_DISPLAY_CARD_ID,
+        selectedStatusIcon: index % 2 === 0 ? "🏐" : "🔥",
+      },
+      progression: { coins: index % 12 },
+    },
+    inventory: {
+      profilePics: [selectedProfilePicId],
+      profilePicBorders: [selectedProfilePicBorderId],
+      backgrounds: [selectedBackgroundId],
+      displayCards: [],
+    },
+    stats: {
+      matchesPlayed: 4 + index,
+      wins: index % 9,
+      attendanceConfirmed: 2 + (index % 12),
+      currentStreak: index % 4,
+      bestStreak: 2 + (index % 7),
+    },
+  };
+}
 
 function createId(prefix) {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -37,8 +98,14 @@ function buildParticipant(userData) {
   };
 }
 
-function buildMatchPlayerFromUser(userData, overrides = {}) {
+function buildMatchPlayerFromUser(userData, overrides = {}, persistedStats = {}) {
   const source = buildParticipant(userData);
+  const currentStreak = persistedStats.currentStreak || 0;
+  const bestStreak = Math.max(
+    persistedStats.bestStreak || 0,
+    persistedStats.bestDailyWinStreak || 0,
+    currentStreak,
+  );
 
   return {
     entryId: createId("player"),
@@ -50,7 +117,11 @@ function buildMatchPlayerFromUser(userData, overrides = {}) {
     isSetter: Boolean(overrides.isSetter),
     addedAt: new Date().toISOString(),
     removedAt: null,
-    stats: emptyPlayerStats(),
+    stats: {
+      ...emptyPlayerStats(),
+      currentWinStreak: currentStreak,
+      bestWinStreak: bestStreak,
+    },
   };
 }
 
@@ -63,6 +134,7 @@ function emptyPlayerStats() {
     setterWins: 0,
     currentWinStreak: 0,
     bestWinStreak: 0,
+    sequenceMilestoneHits: {},
     returnTeamAppearances: 0,
   };
 }
@@ -193,6 +265,66 @@ function shuffle(items) {
   return next;
 }
 
+function isValidInitialTeam(list, players, totalWomen) {
+  const womenLimit = list.womenRuleMode === "two" ? 2 : 1;
+  const womenCount = players.filter((player) => player.sex === "female").length;
+  return players.length === TEAM_SIZE
+    && players.filter((player) => player.isSetter).length <= 1
+    && womenCount <= womenLimit
+    && (totalWomen >= 2 ? womenCount >= 1 : true);
+}
+
+function orderInitialTeam(players) {
+  return [...players].sort((first, second) => {
+    const rank = (player) => {
+      if (player.isSetter) return 0;
+      if (player.sex === "female") return 1;
+      return 2;
+    };
+    return rank(first) - rank(second);
+  });
+}
+
+function buildInitialTeams(list, arrivals) {
+  const firstTwelve = arrivals.slice(0, TEAM_SIZE * 2);
+  const totalWomen = firstTwelve.filter((player) => player.sex === "female").length;
+  const indexes = shuffle(firstTwelve.map((_, index) => index));
+  const combinations = [];
+
+  function collect(start, selected) {
+    if (selected.length === TEAM_SIZE) {
+      combinations.push([...selected]);
+      return;
+    }
+
+    for (let index = start; index < indexes.length; index += 1) {
+      selected.push(indexes[index]);
+      collect(index + 1, selected);
+      selected.pop();
+    }
+  }
+
+  collect(0, []);
+
+  for (const selectedIndexes of shuffle(combinations)) {
+    const selected = new Set(selectedIndexes);
+    const firstTeam = firstTwelve.filter((_, index) => selected.has(index));
+    const secondTeam = firstTwelve.filter((_, index) => !selected.has(index));
+
+    if (isValidInitialTeam(list, firstTeam, totalWomen) && isValidInitialTeam(list, secondTeam, totalWomen)) {
+      return [firstTeam, secondTeam].map((players) => ({
+        id: createId("team"),
+        players: orderInitialTeam(shuffle(players)).map((player) => player.entryId),
+        wins: 0,
+      }));
+    }
+  }
+
+  throw new Error(
+    "Nao foi possivel formar dois times com as regras atuais. Revise levantadores e mulheres.",
+  );
+}
+
 function redistributeLoser(list, teams, loserTeam) {
   const loserIds = loserTeam.players || [];
   const setters = loserIds.filter((id) => getPlayer(list, id)?.isSetter);
@@ -214,12 +346,23 @@ function redistributeLoser(list, teams, loserTeam) {
 
 function snapshotBefore(list) {
   return {
+    teamsFormed: Boolean(list.teamsFormedAt),
     teams: asPlain(list.teams || []),
     returnTeam: asPlain(list.returnTeam || null),
     matchPlayers: asPlain(list.matchPlayers || []),
     games: asPlain(list.games || []),
     summary: asPlain(list.summary || {}),
+    womenRuleMode: list.womenRuleMode || "one",
+    exitAfterTwoWins: list.exitAfterTwoWins !== false,
   };
+}
+
+function appendHistory(list) {
+  return [...(list.history || []), snapshotBefore(list)].slice(-30);
+}
+
+function appendRedoHistory(list) {
+  return [...(list.redoHistory || []), snapshotBefore(list)].slice(-30);
 }
 
 function summarize(list) {
@@ -348,9 +491,11 @@ export async function createVolleyList({ date, adminUser }) {
     guests: [],
     matchPlayers: [],
     teams: [],
+    teamsFormedAt: null,
     returnTeam: null,
     games: [],
     history: [],
+    redoHistory: [],
     womenRuleMode: "one",
     exitAfterTwoWins: true,
     summary: {
@@ -431,11 +576,113 @@ export async function removeVolleyListParticipant({ listId, userId }) {
   return leaveVolleyList({ listId, userId });
 }
 
-export async function addVolleyMatchPlayer({ listId, userData, overrides = {} }) {
+export async function adminAddVolleyListParticipant({ listId, group, userData }) {
+  const listRef = doc(db, COLLECTION_NAME, listId);
+  const groupKey = getGroupKey(group);
+
+  await runTransaction(db, async (transaction) => {
+    const listSnap = await transaction.get(listRef);
+    if (!listSnap.exists()) throw new Error("Lista nao encontrada.");
+
+    const list = listSnap.data();
+    const setters = list.confirmedSetters || list.setters || [];
+    const players = list.confirmedPlayers || list.players || [];
+    if ([...setters, ...players].some((person) => person.id === userData.id)) {
+      throw new Error("Esse jogador ja esta na lista.");
+    }
+
+    const target = groupKey === "setters" ? setters : players;
+    const limitKey = group === "setter" ? "settersLimit" : "playersLimit";
+    if (target.length >= (list[limitKey] || 0)) throw new Error("Esse grupo ja esta cheio.");
+
+    const nextSetters = groupKey === "setters" ? [...setters, buildParticipant(userData)] : setters;
+    const nextPlayers = groupKey === "players" ? [...players, buildParticipant(userData)] : players;
+    const update = {
+      setters: nextSetters,
+      players: nextPlayers,
+      updatedAt: serverTimestamp(),
+    };
+
+    if (list.status === "in_progress") {
+      update.confirmedSetters = nextSetters;
+      update.confirmedPlayers = nextPlayers;
+    }
+
+    transaction.update(listRef, update);
+  });
+}
+
+export async function adminRemoveVolleyListParticipant({ listId, userId }) {
   const listRef = doc(db, COLLECTION_NAME, listId);
 
   await runTransaction(db, async (transaction) => {
     const listSnap = await transaction.get(listRef);
+    if (!listSnap.exists()) throw new Error("Lista nao encontrada.");
+
+    const list = listSnap.data();
+    const setters = (list.confirmedSetters || list.setters || []).filter((person) => person.id !== userId);
+    const players = (list.confirmedPlayers || list.players || []).filter((person) => person.id !== userId);
+    const update = { setters, players, updatedAt: serverTimestamp() };
+
+    if (list.status === "in_progress") {
+      update.confirmedSetters = setters;
+      update.confirmedPlayers = players;
+    }
+
+    transaction.update(listRef, update);
+  });
+}
+
+export async function swapVolleyListParticipants({ listId, firstUserId, secondUserId }) {
+  const listRef = doc(db, COLLECTION_NAME, listId);
+
+  await runTransaction(db, async (transaction) => {
+    const listSnap = await transaction.get(listRef);
+    if (!listSnap.exists()) throw new Error("Lista nao encontrada.");
+
+    const list = listSnap.data();
+    const groups = {
+      setters: [...(list.confirmedSetters || list.setters || [])],
+      players: [...(list.confirmedPlayers || list.players || [])],
+    };
+    const locate = (userId) => {
+      for (const group of ["setters", "players"]) {
+        const index = groups[group].findIndex((person) => person.id === userId);
+        if (index >= 0) return { group, index };
+      }
+      return null;
+    };
+    const first = locate(firstUserId);
+    const second = locate(secondUserId);
+
+    if (!first || !second) throw new Error("Jogador nao encontrado na lista.");
+
+    const firstPerson = groups[first.group][first.index];
+    groups[first.group][first.index] = groups[second.group][second.index];
+    groups[second.group][second.index] = firstPerson;
+
+    const update = {
+      setters: groups.setters,
+      players: groups.players,
+      updatedAt: serverTimestamp(),
+    };
+    if (list.status === "in_progress") {
+      update.confirmedSetters = groups.setters;
+      update.confirmedPlayers = groups.players;
+    }
+    transaction.update(listRef, update);
+  });
+}
+
+export async function addVolleyMatchPlayer({ listId, userData, overrides = {} }) {
+  const listRef = doc(db, COLLECTION_NAME, listId);
+  const statsRef = userData.id ? doc(db, "user_stats", userData.id) : null;
+
+  await runTransaction(db, async (transaction) => {
+    const [listSnap, statsSnap] = await Promise.all([
+      transaction.get(listRef),
+      statsRef ? transaction.get(statsRef) : Promise.resolve(null),
+    ]);
     if (!listSnap.exists()) throw new Error("Lista nao encontrada.");
 
     const list = listSnap.data();
@@ -448,13 +695,17 @@ export async function addVolleyMatchPlayer({ listId, userData, overrides = {} })
       throw new Error("Esse jogador ja esta na pelada.");
     }
 
-    const matchPlayer = buildMatchPlayerFromUser(userData, overrides);
+    const matchPlayer = buildMatchPlayerFromUser(
+      userData,
+      overrides,
+      statsSnap?.exists() ? statsSnap.data() : {},
+    );
     const nextList = {
       ...list,
       matchPlayers: [...currentPlayers, matchPlayer],
     };
 
-    const teams = list.status === "in_progress"
+    const teams = list.status === "in_progress" && list.teamsFormedAt
       ? addPlayerToTeams(nextList, matchPlayer.entryId)
       : list.teams || [];
 
@@ -462,6 +713,8 @@ export async function addVolleyMatchPlayer({ listId, userData, overrides = {} })
       matchPlayers: nextList.matchPlayers,
       teams,
       summary: summarize({ ...nextList, teams }),
+      history: appendHistory(list),
+      redoHistory: [],
       updatedAt: serverTimestamp(),
     });
   });
@@ -491,7 +744,7 @@ export async function addGhostPlayer({ listId, displayName, sex = "male", isSett
       ...list,
       matchPlayers: [...(list.matchPlayers || []), matchPlayer],
     };
-    const teams = list.status === "in_progress"
+    const teams = list.status === "in_progress" && list.teamsFormedAt
       ? addPlayerToTeams(nextList, matchPlayer.entryId)
       : list.teams || [];
 
@@ -499,6 +752,8 @@ export async function addGhostPlayer({ listId, displayName, sex = "male", isSett
       matchPlayers: nextList.matchPlayers,
       teams,
       summary: summarize({ ...nextList, teams }),
+      history: appendHistory(list),
+      redoHistory: [],
       updatedAt: serverTimestamp(),
     });
   });
@@ -518,63 +773,88 @@ export async function seedMockVolleyPlayers({ listId }) {
     }
 
     const now = new Date().toISOString();
-    const setters = Array.from({ length: 4 }).map((_, index) => ({
-      entryId: createId("mock"),
-      kind: "ghost",
-      userId: null,
-      displayName: `Levantador ${index + 1}`,
-      username: "",
-      sex: index === 1 ? "female" : "male",
-      isSetter: true,
-      addedAt: now,
-      removedAt: null,
-      stats: emptyPlayerStats(),
-    }));
-    const players = Array.from({ length: 26 }).map((_, index) => ({
-      entryId: createId("mock"),
-      kind: "ghost",
-      userId: null,
-      displayName: `Jogador ${String(index + 1).padStart(2, "0")}`,
-      username: "",
-      sex: [2, 7, 12, 17, 22].includes(index) ? "female" : "male",
-      isSetter: false,
-      addedAt: now,
-      removedAt: null,
-      stats: emptyPlayerStats(),
-    }));
-    const matchPlayers = [...setters, ...players];
-    const mockSetters = setters.map((player) => ({
+    const realSetters = (list.setters || []).filter(
+      (person) => !person.id?.startsWith("mock_"),
+    );
+    const realPlayers = (list.players || []).filter(
+      (person) => !person.id?.startsWith("mock_"),
+    );
+    const realMatchPlayers = (list.matchPlayers || []).filter(
+      (player) => !player.entryId?.startsWith("mock_"),
+    );
+    const settersToCreate = Math.max(0, (list.settersLimit || 4) - realSetters.length);
+    const playersToCreate = Math.max(0, (list.playersLimit || 26) - realPlayers.length);
+    let mockIndex = 0;
+
+    function createMockPlayer(isSetter) {
+      const entryId = createId("mock");
+      const index = mockIndex;
+      mockIndex += 1;
+      return {
+        entryId,
+        kind: "ghost",
+        userId: entryId,
+        displayName: mockNames[index % mockNames.length],
+        username: `teste${String(index + 1).padStart(2, "0")}`,
+        sex: [1, 5, 9, 13, 17, 21, 25].includes(index) ? "female" : "male",
+        isSetter,
+        addedAt: now,
+        removedAt: null,
+        stats: emptyPlayerStats(),
+      };
+    }
+
+    const mockSetterPlayers = Array.from(
+      { length: settersToCreate },
+      () => createMockPlayer(true),
+    );
+    const mockRegularPlayers = Array.from(
+      { length: playersToCreate },
+      () => createMockPlayer(false),
+    );
+    const mockMatchPlayers = [...mockSetterPlayers, ...mockRegularPlayers];
+    const mockSetters = mockSetterPlayers.map((player) => ({
       id: player.entryId,
       name: player.displayName,
-      username: "",
+      username: player.username,
       role: "guest",
       sex: player.sex,
     }));
-    const mockPlayers = players.map((player) => ({
+    const mockPlayers = mockRegularPlayers.map((player) => ({
       id: player.entryId,
       name: player.displayName,
-      username: "",
+      username: player.username,
       role: "guest",
       sex: player.sex,
     }));
+    const setters = [...realSetters, ...mockSetters];
+    const players = [...realPlayers, ...mockPlayers];
+    const matchPlayers = [...realMatchPlayers, ...mockMatchPlayers];
+    const mockProfiles = mockMatchPlayers.reduce((profiles, player, index) => ({
+      ...profiles,
+      [player.userId]: buildMockProfileBundle(player, index),
+    }), {});
     const nextList = {
       ...list,
-      setters: mockSetters,
-      players: mockPlayers,
+      setters,
+      players,
       matchPlayers,
+      mockProfiles,
       teams: [],
       returnTeam: null,
       games: [],
     };
 
     transaction.update(listRef, {
-      setters: mockSetters,
-      players: mockPlayers,
+      setters,
+      players,
       matchPlayers,
+      mockProfiles,
       teams: [],
       returnTeam: null,
       games: [],
-      history: [snapshotBefore(list)],
+      history: appendHistory(list),
+      redoHistory: [],
       summary: summarize(nextList),
       updatedAt: serverTimestamp(),
     });
@@ -602,6 +882,8 @@ export async function updateMatchPlayerFlags({ listId, entryId, sex, isSetter })
     transaction.update(listRef, {
       matchPlayers,
       summary: summarize({ ...list, matchPlayers }),
+      history: appendHistory(list),
+      redoHistory: [],
       updatedAt: serverTimestamp(),
     });
   });
@@ -615,22 +897,49 @@ export async function startVolleyMatch({ listId }) {
     if (!listSnap.exists()) throw new Error("Lista nao encontrada.");
 
     const list = listSnap.data();
-    let teams = [];
-    const nextList = {
-      ...list,
-      teams,
-    };
+    transaction.update(listRef, {
+      status: "in_progress",
+      confirmedSetters: asPlain(list.setters || []),
+      confirmedPlayers: asPlain(list.players || []),
+      confirmationFrozenAt: serverTimestamp(),
+      matchPlayers: [],
+      teams: [],
+      returnTeam: null,
+      teamsFormedAt: null,
+      history: [],
+      redoHistory: [],
+      summary: summarize({ ...list, matchPlayers: [], teams: [] }),
+      startedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  });
+}
 
-    activePlayers(list).forEach((player) => {
-      teams = addPlayerToTeams({ ...nextList, teams }, player.entryId);
+export async function formInitialVolleyTeams({ listId }) {
+  const listRef = doc(db, COLLECTION_NAME, listId);
+
+  await runTransaction(db, async (transaction) => {
+    const listSnap = await transaction.get(listRef);
+    if (!listSnap.exists()) throw new Error("Lista nao encontrada.");
+
+    const list = listSnap.data();
+    const arrivals = activePlayers(list);
+    if (list.status !== "in_progress") throw new Error("A pelada ainda nao iniciou.");
+    if (list.teamsFormedAt) throw new Error("Os times ja foram montados.");
+    if (arrivals.length < 12) throw new Error("E preciso ter 12 jogadores presentes.");
+
+    let teams = buildInitialTeams(list, arrivals);
+    arrivals.slice(TEAM_SIZE * 2).forEach((player) => {
+      teams = addPlayerToTeams({ ...list, teams }, player.entryId);
     });
 
     transaction.update(listRef, {
-      status: "in_progress",
       teams,
       returnTeam: null,
+      teamsFormedAt: serverTimestamp(),
       summary: summarize({ ...list, teams }),
-      startedAt: serverTimestamp(),
+      history: appendHistory(list),
+      redoHistory: [],
       updatedAt: serverTimestamp(),
     });
   });
@@ -639,9 +948,16 @@ export async function startVolleyMatch({ listId }) {
 export async function toggleVolleyRule({ listId, rule, value }) {
   const listRef = doc(db, COLLECTION_NAME, listId);
 
-  await updateDoc(listRef, {
-    [rule]: value,
-    updatedAt: serverTimestamp(),
+  await runTransaction(db, async (transaction) => {
+    const listSnap = await transaction.get(listRef);
+    if (!listSnap.exists()) throw new Error("Lista nao encontrada.");
+    const list = listSnap.data();
+    transaction.update(listRef, {
+      [rule]: value,
+      history: appendHistory(list),
+      redoHistory: [],
+      updatedAt: serverTimestamp(),
+    });
   });
 }
 
@@ -653,8 +969,6 @@ export async function swapMatchPlayers({ listId, firstEntryId, secondEntryId }) 
     if (!listSnap.exists()) throw new Error("Lista nao encontrada.");
 
     const list = listSnap.data();
-    const previous = snapshotBefore(list);
-
     const swapInTeam = (team) => ({
       ...team,
       players: (team.players || []).map((entryId) => {
@@ -666,11 +980,19 @@ export async function swapMatchPlayers({ listId, firstEntryId, secondEntryId }) 
 
     const teams = (list.teams || []).map(swapInTeam);
     const returnTeam = list.returnTeam ? swapInTeam(list.returnTeam) : null;
+    const matchPlayers = [...(list.matchPlayers || [])];
+    const firstIndex = matchPlayers.findIndex((player) => player.entryId === firstEntryId);
+    const secondIndex = matchPlayers.findIndex((player) => player.entryId === secondEntryId);
+    if (firstIndex >= 0 && secondIndex >= 0) {
+      [matchPlayers[firstIndex], matchPlayers[secondIndex]] = [matchPlayers[secondIndex], matchPlayers[firstIndex]];
+    }
 
     transaction.update(listRef, {
       teams,
       returnTeam,
-      history: [previous],
+      matchPlayers,
+      history: appendHistory(list),
+      redoHistory: [],
       updatedAt: serverTimestamp(),
     });
   });
@@ -684,7 +1006,6 @@ export async function removeMatchPlayer({ listId, entryId }) {
     if (!listSnap.exists()) throw new Error("Lista nao encontrada.");
 
     const list = listSnap.data();
-    const previous = snapshotBefore(list);
     const now = new Date().toISOString();
     const matchPlayers = (list.matchPlayers || []).map((player) =>
       player.entryId === entryId ? { ...player, removedAt: now } : player,
@@ -696,7 +1017,8 @@ export async function removeMatchPlayer({ listId, entryId }) {
       teams: removed.teams,
       returnTeam: removed.returnTeam?.players?.length ? removed.returnTeam : null,
       summary: summarize({ ...list, matchPlayers, teams: removed.teams }),
-      history: [previous],
+      history: appendHistory(list),
+      redoHistory: [],
       updatedAt: serverTimestamp(),
     });
   });
@@ -720,11 +1042,16 @@ export async function recordTeamWin({ listId, winningTeamIndex }) {
     const losingTeamIndex = winningTeamIndex === 0 ? 1 : 0;
     const winningTeam = teams[winningTeamIndex];
     const losingTeam = teams[losingTeamIndex];
-    const previous = snapshotBefore(list);
     const matchPlayers = (list.matchPlayers || []).map((player) => {
       if (winningTeam.players.includes(player.entryId)) {
         const stats = player.stats || emptyPlayerStats();
         const nextStreak = (stats.currentWinStreak || 0) + 1;
+        const sequenceMilestoneHits = { ...(stats.sequenceMilestoneHits || {}) };
+
+        if (sequenceMilestones.includes(nextStreak)) {
+          sequenceMilestoneHits[nextStreak] =
+            (sequenceMilestoneHits[nextStreak] || 0) + 1;
+        }
 
         return {
           ...player,
@@ -736,6 +1063,7 @@ export async function recordTeamWin({ listId, winningTeamIndex }) {
             setterWins: (stats.setterWins || 0) + (player.isSetter ? 1 : 0),
             currentWinStreak: nextStreak,
             bestWinStreak: Math.max(stats.bestWinStreak || 0, nextStreak),
+            sequenceMilestoneHits,
           },
         };
       }
@@ -818,7 +1146,8 @@ export async function recordTeamWin({ listId, winningTeamIndex }) {
       returnTeam,
       games,
       summary: summarize({ ...listWithStats, teams: nextTeams, returnTeam, games }),
-      history: [previous],
+      history: appendHistory(list),
+      redoHistory: [],
       updatedAt: serverTimestamp(),
     });
   });
@@ -832,17 +1161,50 @@ export async function undoVolleyListAction({ listId }) {
     if (!listSnap.exists()) throw new Error("Lista nao encontrada.");
 
     const list = listSnap.data();
-    const last = (list.history || [])[0];
+    const history = list.history || [];
+    const last = history[history.length - 1];
 
     if (!last) throw new Error("Nao ha acao para desfazer.");
 
     transaction.update(listRef, {
       teams: last.teams || [],
+      teamsFormedAt: last.teamsFormed ? list.teamsFormedAt || serverTimestamp() : null,
       returnTeam: last.returnTeam || null,
       matchPlayers: last.matchPlayers || [],
       games: last.games || [],
       summary: last.summary || {},
-      history: [],
+      womenRuleMode: last.womenRuleMode || "one",
+      exitAfterTwoWins: last.exitAfterTwoWins !== false,
+      history: history.slice(0, -1),
+      redoHistory: appendRedoHistory(list),
+      updatedAt: serverTimestamp(),
+    });
+  });
+}
+
+export async function redoVolleyListAction({ listId }) {
+  const listRef = doc(db, COLLECTION_NAME, listId);
+
+  await runTransaction(db, async (transaction) => {
+    const listSnap = await transaction.get(listRef);
+    if (!listSnap.exists()) throw new Error("Lista nao encontrada.");
+
+    const list = listSnap.data();
+    const redoHistory = list.redoHistory || [];
+    const next = redoHistory[redoHistory.length - 1];
+    if (!next) throw new Error("Nao ha acao para refazer.");
+
+    transaction.update(listRef, {
+      teams: next.teams || [],
+      teamsFormedAt: next.teamsFormed ? list.teamsFormedAt || serverTimestamp() : null,
+      returnTeam: next.returnTeam || null,
+      matchPlayers: next.matchPlayers || [],
+      games: next.games || [],
+      summary: next.summary || {},
+      womenRuleMode: next.womenRuleMode || "one",
+      exitAfterTwoWins: next.exitAfterTwoWins !== false,
+      history: appendHistory(list),
+      redoHistory: redoHistory.slice(0, -1),
       updatedAt: serverTimestamp(),
     });
   });
@@ -881,18 +1243,30 @@ export async function finishVolleyList({ listId }) {
     .forEach((player) => {
       const stats = player.stats || emptyPlayerStats();
       const ref = doc(db, "user_stats", player.userId);
+      const sequenceMilestoneHits = Object.fromEntries(
+        Object.entries(stats.sequenceMilestoneHits || {})
+          .filter(([, count]) => count > 0)
+          .map(([threshold, count]) => [threshold, increment(count)]),
+      );
 
       batch.set(
         ref,
         {
           matchesAttended: increment(1),
+          attendanceConfirmed: increment(1),
           gamesPlayed: increment(stats.gamesPlayed || 0),
+          matchesPlayed: increment(stats.gamesPlayed || 0),
           wins: increment(stats.wins || 0),
           losses: increment(stats.losses || 0),
           setterGames: increment(stats.setterGames || 0),
           setterWins: increment(stats.setterWins || 0),
           bestDailyWins: stats.wins || 0,
           bestDailyWinStreak: stats.bestWinStreak || 0,
+          currentStreak: stats.currentWinStreak || 0,
+          bestStreak: stats.bestWinStreak || 0,
+          ...(Object.keys(sequenceMilestoneHits).length
+            ? { sequenceMilestoneHits }
+            : {}),
           lastPlayedAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         },

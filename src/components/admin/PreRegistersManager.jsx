@@ -66,7 +66,7 @@ const sexOptions = [
   { label: "Mulher", value: "female", Icon: Venus },
 ];
 
-function IdvSelect({ value, onChange, options, ariaLabel }) {
+function IdvSelect({ value, onChange, options, ariaLabel, large = false }) {
   const [isOpen, setIsOpen] = useState(false);
   const rootRef = useRef(null);
   const selected = options.find((option) => option.value === value) || options[0];
@@ -81,7 +81,7 @@ function IdvSelect({ value, onChange, options, ariaLabel }) {
   }, [isOpen]);
 
   return (
-    <div ref={rootRef} className="admin-select relative">
+    <div ref={rootRef} className={`admin-select relative ${large ? "admin-select--large" : ""}`}>
       <button
         type="button"
         aria-label={ariaLabel}
@@ -228,7 +228,7 @@ export default function PreRegistersManager() {
         <div className="mb-5 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link
-              to="/admin"
+              to="/menu"
               className="profile-modal-close flex h-10 w-10 items-center justify-center text-white/70"
             >
               <ArrowLeft size={18} />
@@ -298,7 +298,7 @@ export default function PreRegistersManager() {
                       <span className="text-right text-white/72">{roleLabel}</span>
                       <span className="text-white/38">sexo</span>
                       <span className="inline-flex items-center justify-end gap-1 text-white/72">
-                        {item.sex === "female" ? <Venus size={13} className="text-[#ff8a62]" /> : <Mars size={13} className="text-[#ff6235]" />}
+                        {item.sex === "female" ? <Venus size={13} className="text-[#ff3299]" /> : <Mars size={13} className="text-[#ff713f]" />}
                         {item.sex === "female" ? "Mulher" : "Homem"}
                       </span>
                     </div>
@@ -358,18 +358,18 @@ export default function PreRegistersManager() {
                 className="admin-input h-12 px-4 text-sm text-white outline-none placeholder:text-white/30"
               />
 
-              <IdvSelect value={role} onChange={setRole} options={roleOptions} ariaLabel="Tipo de acesso" />
+              <IdvSelect value={role} onChange={setRole} options={roleOptions} ariaLabel="Tipo de acesso" large />
 
               <div
-                className="relative grid grid-cols-2 rounded-full border border-white/10 bg-white/[0.06] p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]"
+                className="relative grid h-12 grid-cols-2 overflow-hidden rounded-md border border-white/10 bg-black/25 p-1"
                 role="radiogroup"
                 aria-label="Sexo"
               >
                 <span
-                  className={`absolute bottom-1 top-1 w-[calc(50%-0.25rem)] rounded-full transition-all duration-300 ease-out ${
+                  className={`pointer-events-none absolute bottom-1 left-1 top-1 w-[calc(50%-4px)] rounded-[3px] transition-all duration-200 ease-out ${
                     sex === "female"
-                      ? "left-[calc(50%+0.125rem)] bg-[#ff8a2e] shadow-[0_0_24px_rgba(255,138,46,0.3)]"
-                      : "left-1 bg-[#ff4b32] shadow-[0_0_24px_rgba(255,75,50,0.3)]"
+                      ? "translate-x-full bg-[#ff3299] shadow-[0_0_20px_rgba(255,50,153,0.3)]"
+                      : "translate-x-0 bg-gradient-to-r from-[#ff3d2e] to-[#ff8a2e] shadow-[0_0_20px_rgba(255,80,42,0.24)]"
                   }`}
                 />
 
@@ -383,17 +383,15 @@ export default function PreRegistersManager() {
                       role="radio"
                       aria-checked={isSelected}
                       onClick={() => setSex(value)}
-                      className={`relative z-10 flex h-11 items-center justify-center gap-2 rounded-full text-sm font-black transition-all duration-300 active:scale-[0.98] ${
+                      className={`relative z-10 flex items-center justify-center gap-2 text-sm font-black transition-colors active:scale-[0.98] ${
                         isSelected
-                          ? "scale-[1.02] text-slate-950"
-                          : "text-slate-400 hover:text-white"
+                          ? "text-[#1a0504]"
+                          : "text-[#9aa89f] hover:text-white"
                       }`}
                     >
                       <Icon
                         size={18}
-                        className={`transition-transform duration-300 ${
-                          isSelected ? "scale-110" : ""
-                        }`}
+                        className="transition-transform duration-200"
                       />
                       {label}
                     </button>

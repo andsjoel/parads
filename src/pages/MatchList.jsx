@@ -4,8 +4,8 @@ import {
   Crown,
   Star,
   Users,
-  Venus,
   Volleyball,
+  X,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
@@ -13,6 +13,7 @@ import { useAuth } from "../contexts/AuthContext";
 import OrbitLoader from "../components/OrbitLoader";
 import generalBackground from "../assets/app-backgrounds/bg-geral.png";
 import waitingListBackground from "../assets/app-backgrounds/bg-waiting-list.png";
+import waitingMatchBackground from "../assets/app-backgrounds/bg-waiting-match.png";
 import {
   PlayerMiniCard,
   ProfileStickerModal,
@@ -23,13 +24,6 @@ import {
   leaveVolleyList,
   subscribeActiveVolleyList,
 } from "../services/volleyListService";
-
-function formatDate(date) {
-  if (!date) return "Data nao definida";
-
-  const [year, month, day] = date.split("-");
-  return `${day}/${month}/${year}`;
-}
 
 function getErrorMessage(error) {
   if (error?.code === "permission-denied") {
@@ -108,52 +102,87 @@ function PresenceGroup({
   );
 }
 
+function FrozenPresenceModal({ list, profilesById, onOpenProfile, onClose }) {
+  const groups = [
+    {
+      title: "Levantadores",
+      icon: Crown,
+      people: list.confirmedSetters || list.setters || [],
+    },
+    {
+      title: "Jogadores",
+      icon: Volleyball,
+      people: list.confirmedPlayers || list.players || [],
+    },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 px-5 py-6 backdrop-blur-sm">
+      <section className="profile-edit-modal flex max-h-[calc(100vh-3rem)] w-full max-w-[420px] flex-col p-5 text-white">
+        <header className="mb-4 flex shrink-0 items-center justify-between gap-3">
+          <div>
+            <h2 className="font-idv-title text-2xl">Lista de presenca</h2>
+            <p className="mt-1 text-xs font-bold text-[#9aa89f]">Confirmacoes encerradas</p>
+          </div>
+          <button type="button" onClick={onClose} className="profile-modal-close flex h-9 w-9 items-center justify-center" aria-label="Fechar">
+            <X size={17} />
+          </button>
+        </header>
+
+        <div className="profile-edit-content min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
+          {groups.map(({ title, icon: Icon, people }) => (
+            <section key={title} className="match-panel p-3">
+              <div className="mb-3 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Icon size={16} className="text-app-primary" />
+                  <h3 className="text-sm font-black text-[#fffaf0]">{title}</h3>
+                </div>
+                <span className="text-xs font-black text-app-primary">{people.length}</span>
+              </div>
+              <div className="space-y-2">
+                {people.map((person, index) => (
+                  <div key={person.id} className="flex items-center gap-2">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center text-[10px] font-black text-app-primary">{index + 1}</span>
+                    <PlayerMiniCard person={person} profileBundle={profilesById[person.id]} onOpen={() => onOpenProfile(person)} />
+                  </div>
+                ))}
+                {!people.length && <p className="py-3 text-center text-xs font-bold text-[#9aa89f]">Nenhum nome confirmado.</p>}
+              </div>
+            </section>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function LivePlayer({ player, profileBundle, onOpen }) {
+  const identityClass = player.isSetter && player.sex === "female"
+    ? "admin-volley-player--setter-woman"
+    : player.isSetter
+      ? "admin-volley-player--setter"
+      : player.sex === "female"
+        ? "admin-volley-player--woman"
+        : "";
+
   return (
     <button
       type="button"
       onClick={player.userId ? onOpen : undefined}
-      className="match-player-row flex min-h-11 w-full items-center justify-between gap-2 px-3 py-2 text-left"
+      className={`match-player-row admin-volley-player ${identityClass} flex min-h-11 w-full items-center border px-3 py-2 text-left`}
     >
-      <div className="min-w-0">
-        <p className="truncate text-sm font-black text-[#fffaf0]">
-          {profileBundle?.user?.profile?.displayName ||
-            profileBundle?.user?.fullName ||
-            player.displayName}
-        </p>
-        <div className="mt-1 flex items-center gap-1.5">
-          {player.kind === "ghost" && (
-            <span className="rounded-full bg-white/[0.07] px-2 py-0.5 text-[10px] font-black text-[#9aa89f]">
-              Ghost
-            </span>
-          )}
-          {player.isSetter && (
-            <span className="rounded-full bg-app-primary/15 px-2 py-0.5 text-[10px] font-black text-app-primary">
-              Lev.
-            </span>
-          )}
-          {player.sex === "female" && (
-            <span className="rounded-full bg-app-accent/15 px-2 py-0.5 text-[10px] font-black text-app-accent">
-              Mulher
-            </span>
-          )}
-        </div>
-      </div>
-
-      {player.stats?.wins > 0 && (
-        <span className="rounded-full bg-app-primary/15 px-2.5 py-1 text-xs font-black text-app-primary">
-          {player.stats.wins}V
-        </span>
-      )}
+      <p className="min-w-0 flex-1 truncate text-sm font-black text-[#fffaf0]">
+        {profileBundle?.user?.profile?.displayName || profileBundle?.user?.fullName || player.displayName}
+      </p>
     </button>
   );
 }
 
-function LiveTeam({ title, team, playersByEntryId, profilesById, onOpenProfile }) {
+function LiveTeam({ title, team, tone = "orange", playersByEntryId, profilesById, onOpenProfile }) {
   const players = team?.players || [];
 
   return (
-    <section className="match-panel p-4">
+    <section className={`match-panel volley-team-frame volley-team-frame--${tone} p-4`}>
       <div className="mb-3 flex items-center justify-between">
         <div>
           <h2 className="text-sm font-black text-[#fffaf0]">{title}</h2>
@@ -193,8 +222,82 @@ function LiveTeam({ title, team, playersByEntryId, profilesById, onOpenProfile }
   );
 }
 
-export default function MatchList() {
+function CourtTeamColumn({ title, team, tone, playersByEntryId, profilesById, onOpenProfile }) {
+  const players = team?.players || [];
+
+  return (
+    <section className={`match-court-team-column match-court-team-column--${tone}`}>
+      <header className="match-court-team-header flex items-center justify-between gap-2 px-3 py-3">
+        <div>
+          <h3 className="text-base font-black text-[#fffaf0]">{title}</h3>
+          <p className="text-xs font-black text-[#9aa89f]">{players.length}/6</p>
+        </div>
+        <Volleyball size={18} />
+      </header>
+
+      <div className="space-y-1.5 px-2 pb-2">
+        {Array.from({ length: 6 }).map((_, index) => {
+          const player = playersByEntryId[players[index]];
+          return player ? (
+            <LivePlayer
+              key={player.entryId}
+              player={player}
+              profileBundle={profilesById[player.userId]}
+              onOpen={() => onOpenProfile(player)}
+            />
+          ) : (
+            <div key={`${team?.id}-${index}`} className="match-court-empty flex h-11 items-center px-3 text-xs font-black text-[#66736b]">
+              Vaga
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function ArrivalOrder({ players, profilesById, onOpenProfile }) {
+  return (
+    <section className="match-panel p-4">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-black text-[#fffaf0]">Ordem de chegada</h2>
+          <p className="text-xs font-semibold text-[#9aa89f]">{players.length} presentes</p>
+        </div>
+        <Users size={18} className="text-app-primary" />
+      </div>
+
+      {players.length ? (
+        <div className="space-y-2">
+          {players.map((player, index) => (
+            <div key={player.entryId} className="flex items-center gap-2">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.05] text-[10px] font-black text-app-primary">
+                {index + 1}
+              </span>
+              <PlayerMiniCard
+                person={{
+                  id: player.userId || player.entryId,
+                  name: player.displayName,
+                  username: player.username,
+                }}
+                profileBundle={profilesById[player.userId]}
+                onOpen={() => player.userId && onOpenProfile(player)}
+              />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="py-5 text-center text-xs font-bold text-[#9aa89f]">
+          Aguardando o primeiro jogador chegar.
+        </p>
+      )}
+    </section>
+  );
+}
+
+export default function MatchList({ mode = "matches" }) {
   const { userData, sessionData, isAdmin, isMember } = useAuth();
+  const isPresenceMode = mode === "presence";
 
   const [list, setList] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -203,6 +306,7 @@ export default function MatchList() {
   const [profilesById, setProfilesById] = useState({});
   const [selectedPerson, setSelectedPerson] = useState(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
+  const [showFrozenList, setShowFrozenList] = useState(false);
 
   useEffect(() => {
     setIsLoading(true);
@@ -231,24 +335,29 @@ export default function MatchList() {
         ...(list?.players || []).map((person) => person.id),
         ...(list?.matchPlayers || []).map((person) => person.userId),
       ].filter(Boolean);
+      const mockProfiles = list?.mockProfiles || {};
+      const remoteIds = [...new Set(ids)].filter((id) => !mockProfiles[id]);
 
       if (!ids.length) {
-        setProfilesById({});
+        setProfilesById(mockProfiles);
         return;
       }
 
       try {
-        const loadedProfiles = await getPublicProfileBundles(ids);
+        const loadedProfiles = remoteIds.length
+          ? await getPublicProfileBundles(remoteIds)
+          : {};
+        const nextProfiles = { ...mockProfiles, ...loadedProfiles };
 
         if (userData?.id && ids.includes(userData.id)) {
-          loadedProfiles[userData.id] = {
+          nextProfiles[userData.id] = {
             user: userData,
             inventory: sessionData?.inventory || null,
             stats: sessionData?.stats || null,
           };
         }
 
-        setProfilesById(loadedProfiles);
+        setProfilesById(nextProfiles);
       } catch (error) {
         console.error(error);
       }
@@ -259,10 +368,9 @@ export default function MatchList() {
 
   const isListOpen = list?.status === "open";
   const isInProgress = list?.status === "in_progress";
+  const isWaitingForMatch = !isPresenceMode && !isInProgress;
   const setters = list?.setters || [];
   const players = list?.players || [];
-  const totalConfirmed = setters.length + players.length;
-  const totalLimit = (list?.settersLimit || 0) + (list?.playersLimit || 0);
   const teams = list?.teams || [];
   const playersByEntryId = useMemo(() => {
     return (list?.matchPlayers || []).reduce((result, player) => {
@@ -345,7 +453,7 @@ export default function MatchList() {
 
   if (isLoading) {
     return (
-      <main className="matches-page flex min-h-screen items-center justify-center px-5 pb-28 pt-6" style={{ backgroundImage: `url(${generalBackground})` }}>
+      <main className="matches-page flex min-h-screen items-center justify-center px-5 pb-28 pt-6" style={{ "--matches-background": `url(${generalBackground})` }}>
         <OrbitLoader />
       </main>
     );
@@ -353,31 +461,30 @@ export default function MatchList() {
 
   return (
     <main
-      className={`matches-page min-h-screen px-5 pb-28 pt-6 text-white ${!list ? "matches-page--waiting" : ""}`}
-      style={{ backgroundImage: `url(${list ? generalBackground : waitingListBackground})` }}
+      className={`matches-page min-h-screen px-5 pb-28 pt-6 text-white ${isPresenceMode ? "matches-page--presence" : "matches-page--matches"} ${isPresenceMode && !list ? "matches-page--waiting" : ""}`}
+      style={{
+        "--matches-background": `url(${
+          isPresenceMode && !list
+            ? waitingListBackground
+            : isWaitingForMatch
+              ? waitingMatchBackground
+              : generalBackground
+        })`,
+      }}
     >
       <section className="mx-auto w-full max-w-[420px] space-y-4">
         <header className="match-panel match-panel--header p-4">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <h1 className="truncate text-xl font-black tracking-tight text-[#fffaf0]">
-                Lista do Volei
+                {isPresenceMode ? "Lista do Volei" : "Partidas"}
               </h1>
-              <p className="match-header-old-meta mt-0.5 truncate text-xs font-semibold text-[#9aa89f]">
-                {list
-                  ? `${formatDate(list.date)} · ${
-                      isInProgress
-                        ? `${list.summary?.totalPlayers || 0} na quadra`
-                        : `${totalConfirmed}/${totalLimit} confirmados`
-                    }`
-                  : "Aguardando abertura da lista"}
-              </p>
             </div>
 
             <div className="flex shrink-0 items-center gap-2">
               {isAdmin && (
                 <Link
-                  to="/admin/volley-list"
+                  to={isPresenceMode ? "/admin/volley-list" : "/admin/matches"}
                   className="flex h-10 w-10 items-center justify-center rounded-2xl border border-app-primary/20 bg-app-primary/10 text-app-primary transition active:scale-95"
                 >
                   <Star size={18} />
@@ -390,16 +497,6 @@ export default function MatchList() {
             </div>
           </div>
 
-          <div className="match-header-meta">
-            <span>{list ? formatDate(list.date) : "Aguardando abertura"}</span>
-            <span>
-              {list
-                ? isInProgress
-                  ? `${list.summary?.totalPlayers || 0} na quadra`
-                  : `${totalConfirmed}/${totalLimit}`
-                : "-"}
-            </span>
-          </div>
         </header>
 
         {errorMessage && (
@@ -408,7 +505,7 @@ export default function MatchList() {
           </p>
         )}
 
-        {list && isListOpen && (
+        {isPresenceMode && list && isListOpen && (
           <>
             <PresenceGroup
               title="Levantadores"
@@ -453,38 +550,49 @@ export default function MatchList() {
           </>
         )}
 
-        {list && isInProgress && (
+        {isPresenceMode && list && isInProgress && (
           <>
-            <section className="match-panel p-4">
-              <div className="grid grid-cols-3 gap-2 text-center">
-                <div className="rounded-2xl bg-white/[0.04] p-2">
-                  <p className="text-lg font-black text-[#fffaf0]">
-                    {list.summary?.totalGames || 0}
-                  </p>
-                  <p className="text-[10px] font-bold text-[#9aa89f]">jogos</p>
-                </div>
-                <div className="rounded-2xl bg-white/[0.04] p-2">
-                  <p className="text-lg font-black text-[#fffaf0]">
-                    {list.summary?.totalPlayers || 0}
-                  </p>
-                  <p className="text-[10px] font-bold text-[#9aa89f]">
-                    presentes
-                  </p>
-                </div>
-                <div className="rounded-2xl bg-white/[0.04] p-2">
-                  <p className="text-lg font-black text-[#fffaf0]">
-                    {list.summary?.totalWomen || 0}
-                  </p>
-                  <p className="text-[10px] font-bold text-[#9aa89f]">
-                    <Venus size={10} className="inline" /> mulheres
-                  </p>
-                </div>
-              </div>
-            </section>
+            <PresenceGroup
+              title="Levantadores"
+              icon={Crown}
+              limit={list.settersLimit}
+              people={list.confirmedSetters || list.setters || []}
+              emptyText="Nenhum levantador confirmou."
+              actionLabel="fechada"
+              disabledAction
+              profilesById={profilesById}
+              onOpenProfile={handleOpenProfile}
+              variant="setters"
+            />
+            <PresenceGroup
+              title="Jogadores"
+              icon={Volleyball}
+              limit={list.playersLimit}
+              people={list.confirmedPlayers || list.players || []}
+              emptyText="Nenhum jogador confirmou."
+              actionLabel="fechada"
+              disabledAction
+              profilesById={profilesById}
+              onOpenProfile={handleOpenProfile}
+              variant="players"
+            />
+          </>
+        )}
 
-            {list.returnTeam && (
+        {!isPresenceMode && list && isInProgress && (
+          <>
+            {!list.teamsFormedAt && (
+              <ArrivalOrder
+                players={(list.matchPlayers || []).filter((player) => !player.removedAt)}
+                profilesById={profilesById}
+                onOpenProfile={handleOpenProfile}
+              />
+            )}
+
+            {list.teamsFormedAt && list.returnTeam && (
               <LiveTeam
                 title="Volta"
+                tone="pink"
                 team={list.returnTeam}
                 playersByEntryId={playersByEntryId}
                 profilesById={profilesById}
@@ -492,31 +600,17 @@ export default function MatchList() {
               />
             )}
 
-            <section className="match-court-panel p-3">
-              <div className="mb-3 flex items-center gap-2 px-1">
-                <Volleyball size={18} className="text-app-primary" />
-                <h2 className="text-sm font-black text-[#fffaf0]">
-                  Em quadra
-                </h2>
+            {list.teamsFormedAt && <section className="match-court-combined">
+              <div className="match-court-teams grid grid-cols-2">
+                <CourtTeamColumn title="Time 1" team={teams[0]} tone="orange" playersByEntryId={playersByEntryId} profilesById={profilesById} onOpenProfile={handleOpenProfile} />
+                <CourtTeamColumn title="Time 2" team={teams[1]} tone="cyan" playersByEntryId={playersByEntryId} profilesById={profilesById} onOpenProfile={handleOpenProfile} />
               </div>
+            </section>}
 
-              <div className="space-y-3">
-                {teams.slice(0, 2).map((team, index) => (
-                  <LiveTeam
-                    key={team.id}
-                    title={`Time ${index + 1}`}
-                    team={team}
-                    playersByEntryId={playersByEntryId}
-                    profilesById={profilesById}
-                    onOpenProfile={handleOpenProfile}
-                  />
-                ))}
-              </div>
-            </section>
-
-            {teams.slice(2).map((team, index) => (
+            {list.teamsFormedAt && teams.slice(2).map((team, index) => (
               <LiveTeam
                 key={team.id}
+                tone={index % 2 === 0 ? "green" : "pink"}
                 title={`${index + 1}º Proxima`}
                 team={team}
                 playersByEntryId={playersByEntryId}
@@ -525,19 +619,19 @@ export default function MatchList() {
               />
             ))}
 
-            {!teams.length && (
-              <section className="match-panel p-5 text-center">
-                <Users className="mx-auto mb-2 text-app-primary" size={22} />
-                <p className="text-sm font-black text-[#fffaf0]">
-                  Aguardando o admin montar os times.
-                </p>
-              </section>
-            )}
           </>
+        )}
+
+        {!isPresenceMode && (!list || isListOpen) && (
+          <h2 className="matches-waiting-match-message" aria-label="Aguardando a partida começar.">
+            <span>Aguardando</span>
+            <span>a partida</span>
+            <span>começar.</span>
+          </h2>
         )}
       </section>
 
-      {!list && (
+      {isPresenceMode && !list && (
         <h2 className="matches-waiting-message" aria-label="A lista ainda não abriu.">
           <span>A lista</span>
           <span>ainda não</span>
@@ -551,6 +645,15 @@ export default function MatchList() {
           profileBundle={profilesById[selectedPerson.id]}
           isLoading={isLoadingProfile && !profilesById[selectedPerson.id]}
           onClose={() => setSelectedPerson(null)}
+        />
+      )}
+
+      {showFrozenList && list && (
+        <FrozenPresenceModal
+          list={list}
+          profilesById={profilesById}
+          onOpenProfile={handleOpenProfile}
+          onClose={() => setShowFrozenList(false)}
         />
       )}
     </main>

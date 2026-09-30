@@ -38,6 +38,15 @@ export function getAssetById(files, id, fallbackId) {
   return fallback?.[1] || "";
 }
 
+function getStaticAssetById(files, id, fallbackId) {
+  const targetId = id || fallbackId;
+  const thumbnail = Object.entries(files).find(([path]) =>
+    path.includes(`${targetId}-thumb.`),
+  );
+
+  return thumbnail?.[1] || getAssetById(files, targetId, fallbackId);
+}
+
 export function getCatalogAssetList(files, catalog) {
   return catalog.map((item) => ({
     ...item,
@@ -45,21 +54,24 @@ export function getCatalogAssetList(files, catalog) {
   }));
 }
 
-export function getProfileAssetUrls(profile = {}) {
+export function getProfileAssetUrls(profile = {}, options = {}) {
+  const getProfileAsset = options.staticPreview
+    ? getStaticAssetById
+    : getAssetById;
   const backgroundUrl = getAssetById(
     backgroundImages,
     profile.selectedBackgroundId,
     "bg-default",
   );
 
-  const profilePicUrl = getAssetById(
+  const profilePicUrl = getProfileAsset(
     profilePicImages,
     profile.selectedProfilePicId,
     "pic-default",
   );
 
   const profilePicBorderUrl = profile.selectedProfilePicBorderId
-    ? getAssetById(
+    ? getProfileAsset(
         profilePicBorderImages,
         profile.selectedProfilePicBorderId,
         profile.selectedProfilePicBorderId,

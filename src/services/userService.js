@@ -116,6 +116,9 @@ export async function createUserBaseData({ uid, preRegister, username, authEmail
     attendanceMissed: 0,
     currentStreak: 0,
     bestStreak: 0,
+    claimedMissionIds: [],
+    sequenceMilestoneHits: {},
+    claimedSequenceMilestoneHits: {},
     updatedAt: serverTimestamp(),
   });
 

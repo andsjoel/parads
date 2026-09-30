@@ -31,15 +31,18 @@ export default function AppRoutes() {
         <Route index element={<Navigate to="/feed" replace />} />
 
         <Route path="feed" element={<Feed />} />
-        <Route path="matches" element={<MatchList />} />
+        <Route path="list" element={<MatchList mode="presence" />} />
+        <Route path="matches" element={<MatchList mode="matches" />} />
         <Route path="profile" element={<Profile />} />
         <Route path="shop" element={<Shop />} />
 
-        <Route path="admin" element={<Admin />} />
+        <Route path="menu" element={<Admin />} />
+        <Route path="admin" element={<Navigate to="/menu" replace />} />
         <Route path="admin/pre-registers" element={<AdminPreRegisters />} />
         <Route path="pre-registers" element={<AdminPreRegisters />} />
 
-        <Route path="admin/volley-list" element={<AdminVolleyList />} />
+        <Route path="admin/volley-list" element={<AdminVolleyList mode="list" />} />
+        <Route path="admin/matches" element={<AdminVolleyList mode="matches" />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/login" replace />} />

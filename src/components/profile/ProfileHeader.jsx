@@ -1,5 +1,5 @@
 /* eslint-disable react/prop-types */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, Edit3, GalleryVerticalEnd, Image, Sparkles, UserRound, X } from "lucide-react";
 
 import { updateUserProfile } from "../../services/profileService";
@@ -40,11 +40,59 @@ function onlyLettersAndNumbers(value) {
   return value.replace(/[^a-zA-ZÀ-ÿ0-9\s]/g, "");
 }
 
+function AdaptiveProfileName({ children }) {
+  const nameRef = useRef(null);
+
+  useLayoutEffect(() => {
+    const element = nameRef.current;
+    if (!element) return undefined;
+
+    const name = String(children || "Jogador").trim();
+    const canWrap = name.includes(" ");
+
+    function fitName() {
+      if (!element.clientWidth) return;
+
+      let fontSize = 60;
+      element.style.whiteSpace = canWrap ? "normal" : "nowrap";
+      element.style.overflowWrap = "normal";
+      element.style.wordBreak = "normal";
+
+      while (fontSize > 28) {
+        element.style.fontSize = `${fontSize}px`;
+        const maxHeight = fontSize * 0.92 * (canWrap ? 2 : 1) + 2;
+        const fitsWidth = element.scrollWidth <= element.clientWidth + 1;
+        const fitsHeight = element.scrollHeight <= maxHeight;
+        if (fitsWidth && fitsHeight) break;
+        fontSize -= 1;
+      }
+    }
+
+    fitName();
+    document.fonts?.ready.then(fitName);
+
+    const observer = new ResizeObserver(fitName);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [children]);
+
+  return (
+    <h2
+      ref={nameRef}
+      className="font-idv-title max-h-[1.84em] w-full overflow-hidden text-[#fffaf0] drop-shadow"
+      style={{ fontSize: "60px", lineHeight: 0.92 }}
+    >
+      {children}
+    </h2>
+  );
+}
+
 export default function ProfileHeader({
   user,
   inventory,
   onUpdated,
   readOnly = false,
+  compact = false,
   onClose,
 }) {
   const profile = user?.profile || {};
@@ -260,7 +308,7 @@ export default function ProfileHeader({
       >
         {!isEditing ? (
           <>
-            <div className="relative h-56 overflow-hidden">
+            <div className={`relative overflow-hidden ${compact ? "h-[clamp(190px,29dvh,224px)]" : "h-56"}`}>
               <img
                 src={backgroundUrl}
                 alt=""
@@ -295,7 +343,7 @@ export default function ProfileHeader({
               )}
             </div>
 
-            <div className="relative px-6 pb-5">
+            <div className="relative px-6 pb-2">
               <div className="-mt-14 mb-3 flex items-end gap-4">
                 <div className="profile-avatar relative h-[96px] w-[96px] shrink-0">
                   <img
@@ -318,9 +366,7 @@ export default function ProfileHeader({
                 </div>
 
                 <div className="min-w-0 flex-1 pb-1">
-                  <h2 className="font-idv-title break-words text-[clamp(2.35rem,10vw,3.75rem)] leading-[0.92] text-[#fffaf0] drop-shadow">
-                    {displayName}
-                  </h2>
+                  <AdaptiveProfileName>{displayName}</AdaptiveProfileName>
 
                   <p className="mt-2 break-all text-sm font-normal text-[#ff8b58]/80">
                     @{user?.username || "player"}
