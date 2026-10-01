@@ -915,6 +915,15 @@
   scrollbar-width: thin;
 }
 
+.profile-mission-compact-list {
+  height: 126px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 3px;
+  scrollbar-color: rgba(255, 113, 63, 0.65) rgba(255, 255, 255, 0.04);
+  scrollbar-width: thin;
+}
+
 .profile-mission-row {
   display: flex;
   min-height: 38px;
@@ -965,16 +974,17 @@
 .app-bottom-nav {
   isolation: isolate;
   min-height: 68px;
-  border-top: 1px solid rgba(255, 111, 63, 0.26);
-  background: rgba(24, 5, 10, 0.7);
+  border: 0;
+  background: transparent;
 }
 
 .app-bottom-nav::before {
   position: absolute;
-  z-index: -1;
+  z-index: -2;
   inset: 0;
   content: "";
-  background: linear-gradient(180deg, rgba(255, 96, 48, 0.13), transparent 45%);
+  background: linear-gradient(90deg, rgba(255, 73, 46, 0.78), #ff8a2e 48%, rgba(255, 73, 46, 0.72));
+  clip-path: polygon(0 7px, 17% 7px, 20% 5px, 44% 6px, 49% 3px, 74% 6px, 79% 4px, 100% 7px, 100% 100%, 0 100%);
   pointer-events: none;
 }
 
@@ -983,7 +993,11 @@
   z-index: -1;
   inset: 1.5px 0 0;
   content: "";
-  background: rgba(24, 5, 10, 0.42);
+  background:
+    linear-gradient(112deg, rgba(255, 106, 51, 0.08), transparent 34%),
+    linear-gradient(180deg, rgba(38, 7, 14, 0.96), rgba(19, 3, 8, 0.98));
+  clip-path: polygon(0 7px, 17% 7px, 20% 5px, 44% 6px, 49% 3px, 74% 6px, 79% 4px, 100% 7px, 100% 100%, 0 100%);
+  box-shadow: 0 -14px 34px rgba(0, 0, 0, 0.38);
   pointer-events: none;
 }
 
@@ -995,7 +1009,8 @@
 .app-nav-item--active {
   background: linear-gradient(135deg, #ff3d2e, #ff8a2e);
   color: #1a0504;
-  box-shadow: 0 0 22px rgba(255, 80, 42, 0.38);
+  box-shadow: 0 7px 22px rgba(255, 80, 42, 0.38);
+  transform: translateY(-5px) scale(1.1);
 }
 
 .login-error-enter {
@@ -2264,6 +2279,34 @@
   --team-glow: rgba(255, 50, 153, 0.08);
 }
 
+.match-return-team {
+  --team-border: rgba(242, 183, 43, 0.92);
+  --team-tint: rgba(242, 183, 43, 0.14);
+  --team-glow: rgba(255, 195, 51, 0.2);
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.3), 0 0 28px var(--team-glow);
+}
+
+.match-return-wrap {
+  position: relative;
+  isolation: isolate;
+  margin-top: 3.5rem;
+  overflow: visible;
+}
+
+.match-return-crown {
+  position: absolute;
+  z-index: 4;
+  top: -3.9rem;
+  left: 0.8rem;
+  width: 6.6rem;
+  height: auto;
+  overflow: visible;
+  filter: drop-shadow(0 5px 3px rgba(0, 0, 0, 0.48)) drop-shadow(0 0 9px rgba(255, 190, 46, 0.3));
+  pointer-events: none;
+  transform: rotate(-9deg);
+  transform-origin: 50% 70%;
+}
+
 .match-court-teams {
   position: relative;
   isolation: isolate;
@@ -2292,15 +2335,16 @@
   background: rgba(18, 3, 8, 0.97);
 }
 
-.match-court-teams > .match-court-team-column:first-child::after {
+.court-teams-frame-divider {
   position: absolute;
-  z-index: 3;
+  z-index: 5;
   top: 4px;
   bottom: 4px;
-  right: 0;
+  left: 50%;
+  width: 0;
   border-left: 1px dashed rgba(255, 255, 255, 0.3);
-  content: "";
   pointer-events: none;
+  transform: translateX(-0.5px);
 }
 
 .match-court-team-column {
@@ -2344,7 +2388,20 @@
 
 .match-court-empty {
   border: 1px dashed rgba(255, 255, 255, 0.16);
+  color: #66736b;
   background: rgba(255, 255, 255, 0.025);
+}
+
+.match-court-empty--setter {
+  border-color: rgba(82, 224, 151, 0.52);
+  color: rgba(125, 229, 174, 0.7);
+  background: rgba(28, 126, 79, 0.08);
+}
+
+.match-court-empty--woman {
+  border-color: rgba(255, 50, 153, 0.5);
+  color: rgba(255, 105, 180, 0.72);
+  background: rgba(184, 18, 103, 0.08);
 }
 
 .match-court-team-column .match-player-row.admin-volley-player--setter {
@@ -2365,6 +2422,65 @@
   box-shadow: inset 4px 0 0 #52e097, inset -4px 0 0 #ff3299;
 }
 
+.admin-match-court-teams > .admin-volley-team--combined {
+  z-index: 1;
+  min-width: 0;
+  padding: 0.55rem;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  clip-path: none;
+}
+
+.admin-match-court-teams > .admin-volley-team--combined::before,
+.admin-match-court-teams > .admin-volley-team--combined::after {
+  display: none;
+}
+
+.admin-match-court-teams > .admin-volley-team--combined:first-child {
+  background: linear-gradient(135deg, rgba(255, 138, 46, 0.1), rgba(10, 2, 5, 0.42));
+}
+
+.admin-match-court-teams > .admin-volley-team--combined:last-child {
+  background: linear-gradient(225deg, rgba(73, 201, 210, 0.1), rgba(10, 2, 5, 0.42));
+}
+
+.admin-match-court-teams .admin-volley-player,
+.admin-match-court-teams .admin-volley-slot {
+  min-height: 42px;
+  padding-right: 0.5rem;
+  padding-left: 0.5rem;
+}
+
+.admin-match-court-teams .admin-volley-player > p {
+  font-size: 0.78rem;
+}
+
+.admin-match-court-teams .admin-volley-player button {
+  width: 1.75rem;
+  height: 1.75rem;
+}
+
+.court-teams-frame > .match-court-team-column {
+  padding: 0.55rem;
+}
+
+.court-teams-frame > .match-court-team-column .match-court-team-header {
+  padding: 0 0 0.65rem;
+  margin-bottom: 0.5rem;
+}
+
+.court-teams-frame > .match-court-team-column > div:last-child {
+  padding: 0;
+}
+
+.court-teams-frame > .match-court-team-column .match-player-row,
+.court-teams-frame > .match-court-team-column .match-court-empty {
+  min-height: 42px;
+  padding-right: 0.5rem;
+  padding-left: 0.5rem;
+}
+
 .admin-volley-team::before {
   z-index: -2;
   inset: 0;
@@ -2383,9 +2499,48 @@
   background: linear-gradient(145deg, rgba(73, 165, 151, 0.09), transparent 44%), rgba(7, 25, 24, 0.84);
 }
 
-.admin-volley-ghost {
-  border-color: rgba(196, 118, 177, 0.25);
-  background: linear-gradient(145deg, rgba(182, 79, 153, 0.09), transparent 44%), rgba(27, 8, 24, 0.84);
+.admin-rule-toggle {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: 100%;
+  padding: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.035);
+  clip-path: polygon(1% 0, 99% 3%, 100% 86%, 97% 100%, 0 96%);
+}
+
+.admin-rule-toggle--women {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.admin-rule-toggle--women button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.admin-rule-toggle button {
+  min-width: 0;
+  height: 38px;
+  color: #84928a;
+  font-size: 0.75rem;
+  font-weight: 900;
+  transition: color 160ms ease, background 160ms ease, transform 120ms ease;
+}
+
+.admin-rule-toggle button:active {
+  transform: scale(0.98);
+}
+
+.admin-rule-toggle button.is-active {
+  color: #17231f;
+  background: #ff713f;
+  clip-path: polygon(2% 3%, 98% 0, 100% 88%, 96% 100%, 0 96%);
+}
+
+.admin-rule-toggle button.is-active.is-women {
+  color: #fff;
+  background: #d91f79;
 }
 
 .admin-volley-page--matches > section > .admin-volley-summary {
@@ -2405,14 +2560,164 @@
   order: 4;
 }
 
-.admin-volley-page--matches > section > .admin-volley-ghost {
+.admin-volley-page--matches > section > .admin-finish-day {
   order: 5;
+}
+
+.admin-finish-day {
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  background: rgba(127, 29, 29, 0.18);
+  clip-path: polygon(2% 2%, 98% 0, 100% 18%, 97% 92%, 91% 100%, 3% 96%, 0 82%);
+}
+
+.reports-page {
+  background-attachment: fixed;
+  background-position: center;
+  background-size: cover;
+}
+
+.report-card,
+.feed-report-card {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border: 1px solid rgba(255, 113, 63, 0.34);
+  background: linear-gradient(140deg, rgba(255, 113, 63, 0.1), transparent 42%), rgba(25, 5, 10, 0.94);
+  box-shadow: 0 15px 38px rgba(0, 0, 0, 0.25);
+  clip-path: polygon(2% 1%, 97% 0, 100% 8%, 98% 94%, 93% 100%, 2% 97%, 0 88%);
+}
+
+.report-card {
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+}
+
+.report-card::before,
+.report-card::after {
+  position: absolute;
+  content: "";
+  pointer-events: none;
+  clip-path: polygon(2% 1%, 97% 0, 100% 8%, 98% 94%, 93% 100%, 2% 97%, 0 88%);
+}
+
+.report-card::before {
+  z-index: -2;
+  inset: 0;
+  background: linear-gradient(115deg, #ff713f, rgba(255, 113, 63, 0.38));
+}
+
+.report-card::after {
+  z-index: -1;
+  inset: 1.5px;
+  background: linear-gradient(140deg, rgba(255, 113, 63, 0.1), transparent 42%), rgba(25, 5, 10, 0.97);
+}
+
+.report-metric,
+.feed-report-metric {
+  display: flex;
+  min-width: 0;
+  min-height: 72px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.035);
+  clip-path: polygon(3% 2%, 97% 0, 100% 88%, 92% 100%, 0 95%);
+}
+
+.report-metric strong,
+.feed-report-metric strong {
+  font-size: 1.25rem;
+  line-height: 1;
+  color: #fffaf0;
+}
+
+.report-metric span,
+.feed-report-metric span {
+  font-size: 0.625rem;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.report-ranking-row,
+.feed-ranking-row {
+  border-left: 2px solid rgba(255, 113, 63, 0.72);
+  background: rgba(255, 255, 255, 0.035);
+  clip-path: polygon(1% 2%, 99% 0, 100% 88%, 97% 100%, 0 95%);
+}
+
+.feed-winner-player {
+  min-height: 44px;
+}
+
+.feed-winner-player .profile-player-mini-card button {
+  padding-right: 3.25rem;
+}
+
+.feed-winner-player .profile-player-mini-background,
+.feed-winner-player .profile-player-mini-name-shade,
+.feed-winner-player .profile-player-mini-edge-shade {
+  border-radius: 5px;
+  clip-path: polygon(1% 2%, 99% 0, 100% 86%, 96% 100%, 0 95%);
+}
+
+.report-publish-button {
+  border: 1px solid rgba(255, 113, 63, 0.4);
+  background: rgba(255, 113, 63, 0.12);
+  color: #ff9b72;
+  clip-path: polygon(3% 2%, 97% 0, 100% 18%, 96% 93%, 89% 100%, 2% 95%, 0 80%);
+}
+
+.report-publish-button.is-remove {
+  border-color: rgba(248, 113, 113, 0.36);
+  background: rgba(127, 29, 29, 0.18);
+  color: #fca5a5;
+}
+
+.report-error {
+  border-left: 3px solid rgba(248, 113, 113, 0.8);
+  background: rgba(127, 29, 29, 0.24);
+}
+
+.feed-report-icon {
+  color: #ff9b72;
+  background: rgba(255, 113, 63, 0.13);
+  clip-path: polygon(8% 0, 92% 5%, 100% 82%, 82% 100%, 5% 92%, 0 14%);
+}
+
+.feed-banner-copy {
+  background: linear-gradient(90deg, rgba(20, 3, 8, 0.96), rgba(20, 3, 8, 0.72) 68%, transparent);
+}
+
+.feed-report-card--wins {
+  border-color: rgba(247, 189, 55, 0.58);
+  background: linear-gradient(140deg, rgba(247, 189, 55, 0.13), transparent 45%), rgba(25, 5, 10, 0.95);
 }
 
 .admin-volley-player {
   border-radius: 5px;
   background: rgba(10, 2, 5, 0.46);
   clip-path: polygon(1% 2%, 98% 0, 100% 14%, 98% 91%, 94% 100%, 2% 96%, 0 84%, 1% 10%);
+}
+
+.admin-volley-slot {
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #66736b;
+  clip-path: polygon(1% 2%, 98% 0, 100% 14%, 98% 91%, 94% 100%, 2% 96%, 0 84%, 1% 10%);
+}
+
+.admin-volley-slot--setter {
+  border-color: rgba(82, 224, 151, 0.52);
+  color: rgba(125, 229, 174, 0.7);
+  background: rgba(28, 126, 79, 0.08);
+}
+
+.admin-volley-slot--woman {
+  border-color: rgba(255, 50, 153, 0.5);
+  color: rgba(255, 105, 180, 0.72);
+  background: rgba(184, 18, 103, 0.08);
 }
 
 .admin-arrival-search-results {
@@ -2471,6 +2776,74 @@
 
 .admin-arrival-search-results button + button {
   border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.admin-add-guest {
+  color: #fffaf0;
+  background: rgba(255, 113, 63, 0.07);
+  clip-path: polygon(1% 4%, 98% 0, 100% 84%, 94% 100%, 0 94%);
+}
+
+.admin-guest-mark {
+  display: inline-grid;
+  width: 19px;
+  height: 19px;
+  place-items: center;
+  border: 1px solid rgba(255, 138, 46, 0.65);
+  color: #ff9a48;
+  font-size: 10px;
+  font-weight: 900;
+  clip-path: polygon(12% 3%, 88% 0, 100% 20%, 94% 88%, 72% 100%, 5% 91%, 0 18%);
+}
+
+.admin-result-setter {
+  border-radius: 5px;
+  background: rgba(10, 2, 5, 0.5);
+  clip-path: polygon(1% 2%, 98% 0, 100% 14%, 98% 91%, 94% 100%, 2% 96%, 0 84%, 1% 10%);
+}
+
+.admin-result-setter--winner {
+  border-color: rgba(82, 224, 151, 0.68);
+  color: #52e097;
+  background: linear-gradient(90deg, rgba(28, 126, 79, 0.38), rgba(12, 39, 27, 0.42));
+  box-shadow: inset 4px 0 0 #52e097, 0 0 18px rgba(82, 224, 151, 0.09);
+}
+
+.admin-result-setter--loser {
+  border-color: rgba(248, 113, 113, 0.48);
+  color: #fca5a5;
+  background: linear-gradient(90deg, rgba(153, 27, 27, 0.32), rgba(54, 12, 18, 0.38));
+  box-shadow: inset 4px 0 0 rgba(248, 113, 113, 0.82), 0 0 18px rgba(248, 113, 113, 0.07);
+}
+
+.admin-result-modal {
+  background:
+    linear-gradient(145deg, rgba(255, 88, 42, 0.09), transparent 42%),
+    rgba(25, 4, 9, 0.98);
+}
+
+.admin-result-label strong {
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.admin-result-label span {
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.admin-result-label--winner strong {
+  color: #82e8ad;
+}
+
+.admin-result-label--loser strong {
+  color: #fca5a5;
+}
+
+.admin-result-versus {
+  clip-path: polygon(12% 2%, 88% 0, 100% 20%, 94% 84%, 76% 100%, 7% 92%, 0 22%);
+  box-shadow: 0 0 18px rgba(239, 68, 68, 0.28);
 }
 
 .admin-volley-page input {

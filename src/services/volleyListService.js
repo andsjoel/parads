@@ -1,5 +1,6 @@
 import {
   collection,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -139,6 +140,108 @@ function emptyPlayerStats() {
   };
 }
 
+async function syncPersistedGameStats({ transaction, beforePlayers, afterPlayers, game, direction }) {
+  if (!game || !direction) return;
+
+  const beforeByEntryId = new Map((beforePlayers || []).map((player) => [player.entryId, player]));
+  const afterByEntryId = new Map((afterPlayers || []).map((player) => [player.entryId, player]));
+  const resultEntryIds = [...(game.winnerPlayers || []), ...(game.loserPlayers || [])];
+  const resultPlayers = resultEntryIds
+    .map((entryId) => afterByEntryId.get(entryId) || beforeByEntryId.get(entryId))
+    .filter((player) => player?.userId);
+  const uniquePlayers = [...new Map(resultPlayers.map((player) => [player.userId, player])).values()];
+  const statsSnapshots = await Promise.all(
+    uniquePlayers.map((player) => transaction.get(doc(db, "user_stats", player.userId))),
+  );
+
+  uniquePlayers.forEach((player, index) => {
+    const statsSnap = statsSnapshots[index];
+    if (!statsSnap.exists()) return;
+
+    const persistedStats = statsSnap.data();
+    const beforePlayer = beforeByEntryId.get(player.entryId) || player;
+    const afterPlayer = afterByEntryId.get(player.entryId) || player;
+    const targetPlayer = direction > 0 ? afterPlayer : beforePlayer;
+    const targetLocalStats = targetPlayer.stats || emptyPlayerStats();
+    const isWinner = (game.winnerPlayers || []).includes(player.entryId);
+    const matchesPlayed = Math.max(0, Math.max(
+      persistedStats.matchesPlayed || 0,
+      persistedStats.gamesPlayed || 0,
+    ) + direction);
+    const statsUpdate = {
+      matchesPlayed,
+      gamesPlayed: matchesPlayed,
+      setterGames: Math.max(0, (persistedStats.setterGames || 0) + (player.isSetter ? direction : 0)),
+      updatedAt: serverTimestamp(),
+    };
+
+    if (isWinner) {
+      const sequenceMilestoneHits = { ...(persistedStats.sequenceMilestoneHits || {}) };
+      const beforeHits = beforePlayer.stats?.sequenceMilestoneHits || {};
+      const afterHits = afterPlayer.stats?.sequenceMilestoneHits || {};
+
+      sequenceMilestones.forEach((threshold) => {
+        const gameDelta = (afterHits[threshold] || 0) - (beforeHits[threshold] || 0);
+        if (!gameDelta) return;
+        sequenceMilestoneHits[threshold] = Math.max(
+          0,
+          (sequenceMilestoneHits[threshold] || 0) + (gameDelta * direction),
+        );
+      });
+
+      Object.assign(statsUpdate, {
+        wins: Math.max(0, (persistedStats.wins || 0) + direction),
+        setterWins: Math.max(0, (persistedStats.setterWins || 0) + (player.isSetter ? direction : 0)),
+        currentStreak: targetLocalStats.currentWinStreak || 0,
+        currentWinStreak: targetLocalStats.currentWinStreak || 0,
+        bestStreak: targetLocalStats.bestWinStreak || 0,
+        bestDailyWinStreak: targetLocalStats.bestWinStreak || 0,
+        sequenceMilestoneHits,
+      });
+    } else {
+      Object.assign(statsUpdate, {
+        losses: Math.max(0, (persistedStats.losses || 0) + direction),
+        currentStreak: targetLocalStats.currentWinStreak || 0,
+        currentWinStreak: targetLocalStats.currentWinStreak || 0,
+      });
+    }
+
+    transaction.update(statsSnap.ref, statsUpdate);
+  });
+}
+
+async function syncPersistedAttendance({ transaction, fromUserIds, toUserIds }) {
+  if (!Array.isArray(fromUserIds) || !Array.isArray(toUserIds)) return;
+
+  const from = new Set(fromUserIds);
+  const to = new Set(toUserIds);
+  const changes = [
+    ...[...to].filter((userId) => !from.has(userId)).map((userId) => ({ userId, direction: 1 })),
+    ...[...from].filter((userId) => !to.has(userId)).map((userId) => ({ userId, direction: -1 })),
+  ];
+  if (!changes.length) return;
+
+  const statsSnapshots = await Promise.all(
+    changes.map(({ userId }) => transaction.get(doc(db, "user_stats", userId))),
+  );
+
+  changes.forEach(({ direction }, index) => {
+    const statsSnap = statsSnapshots[index];
+    if (!statsSnap.exists()) return;
+    const stats = statsSnap.data();
+    const attendance = Math.max(0, Math.max(
+      stats.attendanceConfirmed || 0,
+      stats.matchesAttended || 0,
+    ) + direction);
+
+    transaction.update(statsSnap.ref, {
+      attendanceConfirmed: attendance,
+      matchesAttended: attendance,
+      updatedAt: serverTimestamp(),
+    });
+  });
+}
+
 function getGroupKey(group) {
   if (group === "setter") return "setters";
   if (group === "player") return "players";
@@ -176,14 +279,47 @@ function getTeamPlayers(list, team) {
 
 function canAddPlayerToTeam(list, team, player) {
   const players = getTeamPlayers(list, team);
+  const teamWomenRuleMode = team.womenRuleMode || list.womenRuleMode || "one";
+  const temporarySetterEntryId = (team.players || []).includes(team.temporarySetterEntryId)
+    ? team.temporarySetterEntryId
+    : null;
+  const hasSetter = players.some((item) => item.isSetter)
+    || Boolean(temporarySetterEntryId);
 
   if ((team.players || []).length >= TEAM_SIZE) return false;
-  if (player.isSetter && players.some((item) => item.isSetter)) return false;
+  if (player.isSetter && hasSetter) return false;
 
-  const womenCount = players.filter((item) => item.sex === "female").length;
-  const womenLimit = list.womenRuleMode === "two" ? 2 : 1;
+  const temporaryWomanIds = new Set(team.temporaryWomanEntryIds || []);
+  const womenCount = players.filter(
+    (item) => (
+      (item.sex === "female" || temporaryWomanIds.has(item.entryId))
+      && !item.isSetter
+      && item.entryId !== temporarySetterEntryId
+    ),
+  ).length;
+  const womenLimit = teamWomenRuleMode === "two" ? 2 : 1;
 
-  if (player.sex === "female" && womenCount >= womenLimit) return false;
+  if (
+    teamWomenRuleMode !== "random"
+    && player.sex === "female"
+    && !player.isSetter
+    && womenCount >= womenLimit
+  ) return false;
+
+  const playersAfterAdd = [...players, player];
+  const missingSetterSlots = hasSetter || player.isSetter ? 0 : 1;
+  const womenAfterAdd = playersAfterAdd.filter(
+    (item) => (
+      (item.sex === "female" || temporaryWomanIds.has(item.entryId))
+      && !item.isSetter
+      && item.entryId !== temporarySetterEntryId
+    ),
+  ).length;
+  const missingWomenSlots = Math.max(0, womenLimit - womenAfterAdd);
+
+  if (playersAfterAdd.length + missingSetterSlots + missingWomenSlots > TEAM_SIZE) {
+    return false;
+  }
 
   return true;
 }
@@ -208,6 +344,7 @@ function addPlayerToTeams(list, entryId) {
     id: createId("team"),
     players: [entryId],
     wins: 0,
+    womenRuleMode: list.womenRuleMode || "one",
   });
 
   return teams;
@@ -218,6 +355,12 @@ function removeEntryFromTeamList(teams, entryId) {
     .map((team) => ({
       ...team,
       players: (team.players || []).filter((id) => id !== entryId),
+      temporarySetterEntryId: team.temporarySetterEntryId === entryId
+        ? null
+        : team.temporarySetterEntryId || null,
+      temporaryWomanEntryIds: (team.temporaryWomanEntryIds || []).filter(
+        (id) => id !== entryId,
+      ),
     }))
     .filter((team) => team.players.length > 0);
 }
@@ -229,6 +372,12 @@ function removeEntryEverywhere(list, entryId) {
       ? {
           ...list.returnTeam,
           players: (list.returnTeam.players || []).filter((id) => id !== entryId),
+          temporarySetterEntryId: list.returnTeam.temporarySetterEntryId === entryId
+            ? null
+            : list.returnTeam.temporarySetterEntryId || null,
+          temporaryWomanEntryIds: (list.returnTeam.temporaryWomanEntryIds || []).filter(
+            (id) => id !== entryId,
+          ),
         }
       : null,
   };
@@ -249,6 +398,7 @@ function relocatePlayer(list, teams, entryId) {
     id: createId("team"),
     players: [entryId],
     wins: 0,
+    womenRuleMode: list.womenRuleMode || "one",
   });
 
   return teams;
@@ -265,13 +415,138 @@ function shuffle(items) {
   return next;
 }
 
+function adaptWaitingTeamsForWomenRule(list, nextMode) {
+  const currentMode = list.womenRuleMode || "one";
+  const teams = (list.teams || []).map((team, index) => ({
+    ...team,
+    players: [...(team.players || [])],
+    temporaryWomanEntryIds: [...(team.temporaryWomanEntryIds || [])],
+    womenRuleMode: index >= 2 && (team.players || []).length < TEAM_SIZE
+      ? nextMode
+      : team.womenRuleMode || currentMode,
+  }));
+
+  if (currentMode !== "two" && nextMode === "two") {
+    const displaced = [];
+
+    for (let teamIndex = 2; teamIndex < teams.length; teamIndex += 1) {
+      const team = teams[teamIndex];
+      if ((list.teams?.[teamIndex]?.players || []).length >= TEAM_SIZE) continue;
+
+      while (true) {
+        const teamPlayers = team.players.map((id) => getPlayer(list, id)).filter(Boolean);
+        const hasSetter = teamPlayers.some((player) => player.isSetter)
+          || team.players.includes(team.temporarySetterEntryId);
+        const temporaryWomanIds = new Set(team.temporaryWomanEntryIds || []);
+        const womenCount = teamPlayers.filter((player) => (
+          !player.isSetter
+          && player.entryId !== team.temporarySetterEntryId
+          && (player.sex === "female" || temporaryWomanIds.has(player.entryId))
+        )).length;
+        const requiredSize = team.players.length
+          + (hasSetter ? 0 : 1)
+          + Math.max(0, 2 - womenCount);
+        if (requiredSize <= TEAM_SIZE) break;
+
+        const removable = shuffle(team.players.filter((id) => {
+          const player = getPlayer(list, id);
+          return player
+            && !player.isSetter
+            && player.sex !== "female"
+            && team.temporarySetterEntryId !== id
+            && !temporaryWomanIds.has(id);
+        }))[0];
+        if (!removable) break;
+        team.players = team.players.filter((id) => id !== removable);
+        displaced.push({ entryId: removable, afterIndex: teamIndex });
+      }
+    }
+
+    displaced.forEach(({ entryId, afterIndex }) => {
+      const player = getPlayer(list, entryId);
+      let placed = false;
+      for (let index = afterIndex + 1; index < teams.length; index += 1) {
+        if (canAddPlayerToTeam({ ...list, teams, womenRuleMode: nextMode }, teams[index], player)) {
+          teams[index].players.push(entryId);
+          placed = true;
+          break;
+        }
+      }
+      if (!placed) {
+        teams.push({
+          id: createId("team"),
+          players: [entryId],
+          wins: 0,
+          womenRuleMode: nextMode,
+          temporaryWomanEntryIds: [],
+        });
+      }
+    });
+
+    return teams;
+  }
+
+  if (currentMode !== "two" || nextMode === "two") return teams;
+
+  for (let targetIndex = 2; targetIndex < teams.length; targetIndex += 1) {
+    const targetTeam = teams[targetIndex];
+    if (targetTeam.players.length >= TEAM_SIZE) continue;
+
+    while (targetTeam.players.length < TEAM_SIZE) {
+      const candidates = [];
+
+      for (let sourceIndex = targetIndex + 1; sourceIndex < teams.length; sourceIndex += 1) {
+        const sourceTeam = teams[sourceIndex];
+        sourceTeam.players.forEach((candidateId) => {
+          const player = getPlayer(list, candidateId);
+          const occupiesSpecialSlot = sourceTeam.temporarySetterEntryId === candidateId
+            || sourceTeam.temporaryWomanEntryIds.includes(candidateId);
+          const sourceWomenCount = sourceTeam.players.filter((id) => {
+            const sourcePlayer = getPlayer(list, id);
+            return sourcePlayer
+              && sourcePlayer.sex === "female"
+              && !sourcePlayer.isSetter
+              && id !== sourceTeam.temporarySetterEntryId;
+          }).length;
+          const isRandomExtraWoman = nextMode === "random"
+            && player?.sex === "female"
+            && sourceWomenCount > 1;
+          if (
+            !player
+            || player.isSetter
+            || (player.sex === "female" && !isRandomExtraWoman)
+            || occupiesSpecialSlot
+          ) return;
+          if (canAddPlayerToTeam({ ...list, teams, womenRuleMode: nextMode }, targetTeam, player)) {
+            candidates.push({ candidateId, sourceIndex });
+          }
+        });
+      }
+
+      if (!candidates.length) break;
+      const selected = shuffle(candidates)[0];
+      const sourceTeam = teams[selected.sourceIndex];
+      sourceTeam.players = sourceTeam.players.filter((id) => id !== selected.candidateId);
+      sourceTeam.temporaryWomanEntryIds = sourceTeam.temporaryWomanEntryIds.filter(
+        (id) => id !== selected.candidateId,
+      );
+      targetTeam.players.push(selected.candidateId);
+    }
+  }
+
+  return teams;
+}
+
 function isValidInitialTeam(list, players, totalWomen) {
   const womenLimit = list.womenRuleMode === "two" ? 2 : 1;
-  const womenCount = players.filter((player) => player.sex === "female").length;
+  const womenCount = players.filter(
+    (player) => player.sex === "female" && !player.isSetter,
+  ).length;
+  const requiredWomen = Math.min(womenLimit, Math.floor(totalWomen / 2));
   return players.length === TEAM_SIZE
-    && players.filter((player) => player.isSetter).length <= 1
-    && womenCount <= womenLimit
-    && (totalWomen >= 2 ? womenCount >= 1 : true);
+    && players.filter((player) => player.isSetter).length === 1
+    && (list.womenRuleMode === "random" || womenCount <= womenLimit)
+    && womenCount >= requiredWomen;
 }
 
 function orderInitialTeam(players) {
@@ -287,7 +562,9 @@ function orderInitialTeam(players) {
 
 function buildInitialTeams(list, arrivals) {
   const firstTwelve = arrivals.slice(0, TEAM_SIZE * 2);
-  const totalWomen = firstTwelve.filter((player) => player.sex === "female").length;
+  const totalWomen = firstTwelve.filter(
+    (player) => player.sex === "female" && !player.isSetter,
+  ).length;
   const indexes = shuffle(firstTwelve.map((_, index) => index));
   const combinations = [];
 
@@ -316,6 +593,7 @@ function buildInitialTeams(list, arrivals) {
         id: createId("team"),
         players: orderInitialTeam(shuffle(players)).map((player) => player.entryId),
         wins: 0,
+        womenRuleMode: list.womenRuleMode || "one",
       }));
     }
   }
@@ -327,17 +605,7 @@ function buildInitialTeams(list, arrivals) {
 
 function redistributeLoser(list, teams, loserTeam) {
   const loserIds = loserTeam.players || [];
-  const setters = loserIds.filter((id) => getPlayer(list, id)?.isSetter);
-  const women = loserIds.filter((id) => {
-    const player = getPlayer(list, id);
-    return player?.sex === "female" && !player.isSetter;
-  });
-  const others = loserIds.filter((id) => {
-    const player = getPlayer(list, id);
-    return player && !player.isSetter && player.sex !== "female";
-  });
-
-  [...setters, ...women, ...shuffle(others)].forEach((entryId) => {
+  shuffle(loserIds).forEach((entryId) => {
     teams = relocatePlayer(list, teams, entryId);
   });
 
@@ -351,6 +619,7 @@ function snapshotBefore(list) {
     returnTeam: asPlain(list.returnTeam || null),
     matchPlayers: asPlain(list.matchPlayers || []),
     games: asPlain(list.games || []),
+    attendedUserIds: asPlain(list.attendedUserIds || []),
     summary: asPlain(list.summary || {}),
     womenRuleMode: list.womenRuleMode || "one",
     exitAfterTwoWins: list.exitAfterTwoWins !== false,
@@ -687,6 +956,10 @@ export async function addVolleyMatchPlayer({ listId, userData, overrides = {} })
 
     const list = listSnap.data();
     const currentPlayers = list.matchPlayers || [];
+    const attendedUserIds = new Set([
+      ...(list.attendedUserIds || []),
+      ...currentPlayers.map((player) => player.userId).filter(Boolean),
+    ]);
 
     if (
       userData.id &&
@@ -708,9 +981,29 @@ export async function addVolleyMatchPlayer({ listId, userData, overrides = {} })
     const teams = list.status === "in_progress" && list.teamsFormedAt
       ? addPlayerToTeams(nextList, matchPlayer.entryId)
       : list.teams || [];
+    const shouldCreditAttendance = Boolean(
+      userData.id && statsSnap?.exists() && !attendedUserIds.has(userData.id),
+    );
+
+    if (shouldCreditAttendance) {
+      const persistedStats = statsSnap.data();
+      const nextAttendance = Math.max(
+        persistedStats.attendanceConfirmed || 0,
+        persistedStats.matchesAttended || 0,
+      ) + 1;
+
+      transaction.update(statsRef, {
+        attendanceConfirmed: nextAttendance,
+        matchesAttended: nextAttendance,
+        lastAttendedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      attendedUserIds.add(userData.id);
+    }
 
     transaction.update(listRef, {
       matchPlayers: nextList.matchPlayers,
+      attendedUserIds: [...attendedUserIds],
       teams,
       summary: summarize({ ...nextList, teams }),
       history: appendHistory(list),
@@ -723,7 +1016,7 @@ export async function addVolleyMatchPlayer({ listId, userData, overrides = {} })
 export async function addGhostPlayer({ listId, displayName, sex = "male", isSetter = false }) {
   const listRef = doc(db, COLLECTION_NAME, listId);
 
-  await runTransaction(db, async (transaction) => {
+  return runTransaction(db, async (transaction) => {
     const listSnap = await transaction.get(listRef);
     if (!listSnap.exists()) throw new Error("Lista nao encontrada.");
 
@@ -756,6 +1049,8 @@ export async function addGhostPlayer({ listId, displayName, sex = "male", isSett
       redoHistory: [],
       updatedAt: serverTimestamp(),
     });
+
+    return matchPlayer;
   });
 }
 
@@ -869,19 +1164,71 @@ export async function updateMatchPlayerFlags({ listId, entryId, sex, isSetter })
     if (!listSnap.exists()) throw new Error("Lista nao encontrada.");
 
     const list = listSnap.data();
+    const currentPlayer = (list.matchPlayers || []).find(
+      (player) => player.entryId === entryId,
+    );
+    if (!currentPlayer) throw new Error("Jogador nao encontrado.");
+
+    const updatedPlayer = {
+      ...currentPlayer,
+      sex: sex || currentPlayer.sex,
+      isSetter: typeof isSetter === "boolean" ? isSetter : currentPlayer.isSetter,
+    };
     const matchPlayers = (list.matchPlayers || []).map((player) =>
       player.entryId === entryId
-        ? {
-            ...player,
-            sex: sex || player.sex,
-            isSetter: typeof isSetter === "boolean" ? isSetter : player.isSetter,
-          }
+        ? updatedPlayer
         : player,
     );
+    const teams = (list.teams || []).map((team) => ({
+      ...team,
+      players: [...(team.players || [])],
+    }));
+    const sourceTeamIndex = teams.findIndex((team) => team.players.includes(entryId));
+    const becameSetter = !currentPlayer.isSetter && updatedPlayer.isSetter;
+    const becameWoman = currentPlayer.sex !== "female"
+      && updatedPlayer.sex === "female"
+      && !updatedPlayer.isSetter;
+
+    if (sourceTeamIndex >= 2 && (becameSetter || becameWoman)) {
+      const targetTeamIndex = teams.findIndex((team, index) => {
+        if (index < 2 || index >= sourceTeamIndex) return false;
+        if ((team.players || []).length >= TEAM_SIZE) return false;
+
+        const teamPlayers = (team.players || [])
+          .map((playerEntryId) => matchPlayers.find((player) => player.entryId === playerEntryId))
+          .filter(Boolean);
+
+        if (becameSetter) {
+          const hasSetter = teamPlayers.some((player) => player.isSetter)
+            || team.players.includes(team.temporarySetterEntryId);
+          return !hasSetter;
+        }
+
+        const womenLimit = (team.womenRuleMode || list.womenRuleMode || "one") === "two"
+          ? 2
+          : 1;
+        const womenCount = teamPlayers.filter((player) => (
+          player.sex === "female"
+          && !player.isSetter
+          && player.entryId !== team.temporarySetterEntryId
+        )).length;
+        return womenCount < womenLimit;
+      });
+
+      if (targetTeamIndex >= 0) {
+        const sourceTeam = teams[sourceTeamIndex];
+        sourceTeam.players = sourceTeam.players.filter((playerEntryId) => playerEntryId !== entryId);
+        if (sourceTeam.temporarySetterEntryId === entryId) {
+          sourceTeam.temporarySetterEntryId = null;
+        }
+        teams[targetTeamIndex].players.push(entryId);
+      }
+    }
 
     transaction.update(listRef, {
       matchPlayers,
-      summary: summarize({ ...list, matchPlayers }),
+      teams,
+      summary: summarize({ ...list, matchPlayers, teams }),
       history: appendHistory(list),
       redoHistory: [],
       updatedAt: serverTimestamp(),
@@ -952,12 +1299,25 @@ export async function toggleVolleyRule({ listId, rule, value }) {
     const listSnap = await transaction.get(listRef);
     if (!listSnap.exists()) throw new Error("Lista nao encontrada.");
     const list = listSnap.data();
-    transaction.update(listRef, {
+    const update = {
       [rule]: value,
       history: appendHistory(list),
       redoHistory: [],
       updatedAt: serverTimestamp(),
-    });
+    };
+
+    if (rule === "womenRuleMode") {
+      const currentMode = list.womenRuleMode || "one";
+      update.teams = adaptWaitingTeamsForWomenRule(list, value);
+      update.returnTeam = list.returnTeam
+        ? {
+            ...list.returnTeam,
+            womenRuleMode: list.returnTeam.womenRuleMode || currentMode,
+          }
+        : null;
+    }
+
+    transaction.update(listRef, update);
   });
 }
 
@@ -969,14 +1329,30 @@ export async function swapMatchPlayers({ listId, firstEntryId, secondEntryId }) 
     if (!listSnap.exists()) throw new Error("Lista nao encontrada.");
 
     const list = listSnap.data();
-    const swapInTeam = (team) => ({
-      ...team,
-      players: (team.players || []).map((entryId) => {
+    const swapInTeam = (team) => {
+      let temporarySetterEntryId = team.temporarySetterEntryId || null;
+      const temporaryWomanEntryIds = (team.temporaryWomanEntryIds || []).map((entryId) => {
         if (entryId === firstEntryId) return secondEntryId;
         if (entryId === secondEntryId) return firstEntryId;
         return entryId;
-      }),
-    });
+      });
+      if (temporarySetterEntryId === firstEntryId) {
+        temporarySetterEntryId = secondEntryId;
+      } else if (temporarySetterEntryId === secondEntryId) {
+        temporarySetterEntryId = firstEntryId;
+      }
+
+      return {
+        ...team,
+        temporarySetterEntryId,
+        temporaryWomanEntryIds,
+        players: (team.players || []).map((entryId) => {
+        if (entryId === firstEntryId) return secondEntryId;
+        if (entryId === secondEntryId) return firstEntryId;
+        return entryId;
+        }),
+      };
+    };
 
     const teams = (list.teams || []).map(swapInTeam);
     const returnTeam = list.returnTeam ? swapInTeam(list.returnTeam) : null;
@@ -991,6 +1367,69 @@ export async function swapMatchPlayers({ listId, firstEntryId, secondEntryId }) 
       teams,
       returnTeam,
       matchPlayers,
+      history: appendHistory(list),
+      redoHistory: [],
+      updatedAt: serverTimestamp(),
+    });
+  });
+}
+
+export async function moveMatchPlayerToTeamVacancy({ listId, entryId, targetTeamId, slotType }) {
+  const listRef = doc(db, COLLECTION_NAME, listId);
+
+  await runTransaction(db, async (transaction) => {
+    const listSnap = await transaction.get(listRef);
+    if (!listSnap.exists()) throw new Error("Lista nao encontrada.");
+
+    const list = listSnap.data();
+    const player = getPlayer(list, entryId);
+    if (!player || player.removedAt) throw new Error("Jogador nao encontrado.");
+
+    let targetFound = false;
+    const moveIntoTeam = (team) => {
+      const alreadyInTarget = (team.players || []).includes(entryId);
+      const players = (team.players || []).filter((id) => id !== entryId);
+
+      if (team.id !== targetTeamId) {
+        return {
+          ...team,
+          players,
+          temporarySetterEntryId: team.temporarySetterEntryId === entryId
+            ? null
+            : team.temporarySetterEntryId || null,
+          temporaryWomanEntryIds: (team.temporaryWomanEntryIds || []).filter(
+            (id) => id !== entryId,
+          ),
+        };
+      }
+
+      targetFound = true;
+      if (!alreadyInTarget && players.length >= TEAM_SIZE) {
+        throw new Error("Esse time nao possui vaga disponivel.");
+      }
+
+      return {
+        ...team,
+        players: [...players, entryId],
+        temporarySetterEntryId: slotType === "setter" && !player.isSetter
+          ? entryId
+          : team.temporarySetterEntryId === entryId
+            ? null
+            : team.temporarySetterEntryId || null,
+        temporaryWomanEntryIds: slotType === "woman" && player.sex !== "female"
+          ? [...new Set([...(team.temporaryWomanEntryIds || []).filter((id) => id !== entryId), entryId])]
+          : (team.temporaryWomanEntryIds || []).filter((id) => id !== entryId),
+      };
+    };
+
+    const teams = (list.teams || []).map(moveIntoTeam);
+    const returnTeam = list.returnTeam ? moveIntoTeam(list.returnTeam) : null;
+    if (!targetFound) throw new Error("Time de destino nao encontrado.");
+
+    transaction.update(listRef, {
+      teams,
+      returnTeam,
+      summary: summarize({ ...list, teams, returnTeam }),
       history: appendHistory(list),
       redoHistory: [],
       updatedAt: serverTimestamp(),
@@ -1035,6 +1474,7 @@ export async function recordTeamWin({ listId, winningTeamIndex }) {
     const teams = (list.teams || []).map((team) => ({
       ...team,
       players: [...(team.players || [])],
+      temporarySetterEntryId: team.temporarySetterEntryId || null,
     }));
 
     if (teams.length < 2) throw new Error("E preciso ter dois times em quadra.");
@@ -1042,6 +1482,82 @@ export async function recordTeamWin({ listId, winningTeamIndex }) {
     const losingTeamIndex = winningTeamIndex === 0 ? 1 : 0;
     const winningTeam = teams[winningTeamIndex];
     const losingTeam = teams[losingTeamIndex];
+    if (!winningTeam || !losingTeam) throw new Error("Time invalido.");
+
+    const playersBeforeResult = list.matchPlayers || [];
+    const resultEntryIds = new Set([
+      ...(winningTeam.players || []),
+      ...(losingTeam.players || []),
+    ]);
+    const resultPlayers = playersBeforeResult.filter(
+      (player) => resultEntryIds.has(player.entryId) && player.userId,
+    );
+    const uniqueUserIds = [...new Set(resultPlayers.map((player) => player.userId))];
+    const statsSnapshots = await Promise.all(
+      uniqueUserIds.map((userId) => transaction.get(doc(db, "user_stats", userId))),
+    );
+    const persistedStatsByUserId = new Map(
+      statsSnapshots
+        .filter((statsSnap) => statsSnap.exists())
+        .map((statsSnap) => [statsSnap.id, statsSnap.data()]),
+    );
+
+    resultPlayers.forEach((player) => {
+      const persistedStats = persistedStatsByUserId.get(player.userId);
+      if (!persistedStats) return;
+
+      const isWinner = winningTeam.players.includes(player.entryId);
+      const matchesPlayed = Math.max(
+        persistedStats.matchesPlayed || 0,
+        persistedStats.gamesPlayed || 0,
+      ) + 1;
+      const statsUpdate = {
+        matchesPlayed,
+        gamesPlayed: matchesPlayed,
+        setterGames: (persistedStats.setterGames || 0) + (player.isSetter ? 1 : 0),
+        lastPlayedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
+
+      if (isWinner) {
+        const currentStreak = Math.max(
+          persistedStats.currentStreak || 0,
+          persistedStats.currentWinStreak || 0,
+        ) + 1;
+        const bestStreak = Math.max(
+          persistedStats.bestStreak || 0,
+          persistedStats.bestDailyWinStreak || 0,
+          currentStreak,
+        );
+        const sequenceMilestoneHits = {
+          ...(persistedStats.sequenceMilestoneHits || {}),
+        };
+
+        if (sequenceMilestones.includes(currentStreak)) {
+          sequenceMilestoneHits[currentStreak] =
+            (sequenceMilestoneHits[currentStreak] || 0) + 1;
+        }
+
+        Object.assign(statsUpdate, {
+          wins: (persistedStats.wins || 0) + 1,
+          setterWins: (persistedStats.setterWins || 0) + (player.isSetter ? 1 : 0),
+          currentStreak,
+          currentWinStreak: currentStreak,
+          bestStreak,
+          bestDailyWinStreak: bestStreak,
+          sequenceMilestoneHits,
+        });
+      } else {
+        Object.assign(statsUpdate, {
+          losses: (persistedStats.losses || 0) + 1,
+          currentStreak: 0,
+          currentWinStreak: 0,
+        });
+      }
+
+      transaction.update(doc(db, "user_stats", player.userId), statsUpdate);
+    });
+
     const matchPlayers = (list.matchPlayers || []).map((player) => {
       if (winningTeam.players.includes(player.entryId)) {
         const stats = player.stats || emptyPlayerStats();
@@ -1096,7 +1612,12 @@ export async function recordTeamWin({ listId, winningTeamIndex }) {
       ...nextTeams[nextWinningTeamIndex],
       wins: (winningTeam.wins || 0) + 1,
     };
-    let returnTeam = list.returnTeam || null;
+    let returnTeam = list.returnTeam
+      ? {
+          ...list.returnTeam,
+          temporarySetterEntryId: list.returnTeam.temporarySetterEntryId || null,
+        }
+      : null;
 
     nextTeams = redistributeLoser(listWithStats, nextTeams, losingTeam);
 
@@ -1104,7 +1625,7 @@ export async function recordTeamWin({ listId, winningTeamIndex }) {
       if (returnTeam) {
         returnTeam = {
           ...returnTeam,
-          wins: returnTeam.wins || 0,
+          wins: 0,
         };
         nextTeams = nextTeams.filter((team) => team.id !== losingTeam.id);
         nextTeams.unshift(returnTeam);
@@ -1166,12 +1687,31 @@ export async function undoVolleyListAction({ listId }) {
 
     if (!last) throw new Error("Nao ha acao para desfazer.");
 
+    await syncPersistedAttendance({
+      transaction,
+      fromUserIds: list.attendedUserIds,
+      toUserIds: last.attendedUserIds,
+    });
+
+    const currentGames = list.games || [];
+    const previousGames = last.games || [];
+    if (currentGames.length === previousGames.length + 1) {
+      await syncPersistedGameStats({
+        transaction,
+        beforePlayers: last.matchPlayers || [],
+        afterPlayers: list.matchPlayers || [],
+        game: currentGames[currentGames.length - 1],
+        direction: -1,
+      });
+    }
+
     transaction.update(listRef, {
       teams: last.teams || [],
       teamsFormedAt: last.teamsFormed ? list.teamsFormedAt || serverTimestamp() : null,
       returnTeam: last.returnTeam || null,
       matchPlayers: last.matchPlayers || [],
       games: last.games || [],
+      attendedUserIds: last.attendedUserIds || list.attendedUserIds || [],
       summary: last.summary || {},
       womenRuleMode: last.womenRuleMode || "one",
       exitAfterTwoWins: last.exitAfterTwoWins !== false,
@@ -1194,12 +1734,31 @@ export async function redoVolleyListAction({ listId }) {
     const next = redoHistory[redoHistory.length - 1];
     if (!next) throw new Error("Nao ha acao para refazer.");
 
+    await syncPersistedAttendance({
+      transaction,
+      fromUserIds: list.attendedUserIds,
+      toUserIds: next.attendedUserIds,
+    });
+
+    const currentGames = list.games || [];
+    const nextGames = next.games || [];
+    if (nextGames.length === currentGames.length + 1) {
+      await syncPersistedGameStats({
+        transaction,
+        beforePlayers: list.matchPlayers || [],
+        afterPlayers: next.matchPlayers || [],
+        game: nextGames[nextGames.length - 1],
+        direction: 1,
+      });
+    }
+
     transaction.update(listRef, {
       teams: next.teams || [],
       teamsFormedAt: next.teamsFormed ? list.teamsFormedAt || serverTimestamp() : null,
       returnTeam: next.returnTeam || null,
       matchPlayers: next.matchPlayers || [],
       games: next.games || [],
+      attendedUserIds: next.attendedUserIds || list.attendedUserIds || [],
       summary: next.summary || {},
       womenRuleMode: next.womenRuleMode || "one",
       exitAfterTwoWins: next.exitAfterTwoWins !== false,
@@ -1212,13 +1771,38 @@ export async function redoVolleyListAction({ listId }) {
 
 export async function finishVolleyList({ listId }) {
   const listRef = doc(db, COLLECTION_NAME, listId);
+  const reportRef = doc(db, "volley_reports", listId);
+  const metricsRef = doc(db, "app_metrics", "volley");
 
-  await runTransaction(db, async (transaction) => {
-    const listSnap = await transaction.get(listRef);
+  const finalized = await runTransaction(db, async (transaction) => {
+    const [listSnap, reportSnap, metricsSnap] = await Promise.all([
+      transaction.get(listRef),
+      transaction.get(reportRef),
+      transaction.get(metricsRef),
+    ]);
     if (!listSnap.exists()) throw new Error("Lista nao encontrada.");
+    if (reportSnap.exists() || listSnap.data().status === "closed") return false;
 
     const list = listSnap.data();
     const finalSummary = summarize(list);
+    const ranking = activePlayers(list)
+      .map((player) => ({
+        entryId: player.entryId,
+        userId: player.userId || null,
+        displayName: player.displayName || "Jogador",
+        wins: player.stats?.wins || 0,
+        gamesPlayed: player.stats?.gamesPlayed || 0,
+        profileBundle: list.mockProfiles?.[player.userId] || null,
+      }));
+    const winsRanking = [...ranking].sort(
+      (first, second) => second.wins - first.wins
+        || second.gamesPlayed - first.gamesPlayed
+        || first.displayName.localeCompare(second.displayName),
+    );
+    const reportSummary = {
+      totalGames: finalSummary.totalGames,
+      totalPlayers: finalSummary.totalPlayers,
+    };
     const finalState = {
       teams: list.teams || [],
       returnTeam: list.returnTeam || null,
@@ -1231,48 +1815,35 @@ export async function finishVolleyList({ listId }) {
       closedAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
+
+    transaction.set(reportRef, {
+      listId,
+      date: list.date || "",
+      summary: reportSummary,
+      winsRanking,
+      createdBy: list.createdBy || null,
+      closedAt: serverTimestamp(),
+    });
+
+    const metrics = metricsSnap.exists() ? metricsSnap.data() : {};
+    transaction.set(metricsRef, {
+      totalDays: (metrics.totalDays || 0) + 1,
+      totalGames: (metrics.totalGames || 0) + finalSummary.totalGames,
+      totalAttendances: deleteField(),
+      lastReportId: listId,
+      lastDate: list.date || "",
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+
+    return true;
   });
+
+  if (!finalized) return;
 
   const closedListSnap = await getDoc(listRef);
   const data = closedListSnap.exists() ? closedListSnap.data() : null;
   const batch = writeBatch(db);
   const noShowIds = new Set((data?.summary?.noShows || []).map((person) => person.id));
-
-  activePlayers(data || {})
-    .filter((player) => player.kind === "member" && player.userId)
-    .forEach((player) => {
-      const stats = player.stats || emptyPlayerStats();
-      const ref = doc(db, "user_stats", player.userId);
-      const sequenceMilestoneHits = Object.fromEntries(
-        Object.entries(stats.sequenceMilestoneHits || {})
-          .filter(([, count]) => count > 0)
-          .map(([threshold, count]) => [threshold, increment(count)]),
-      );
-
-      batch.set(
-        ref,
-        {
-          matchesAttended: increment(1),
-          attendanceConfirmed: increment(1),
-          gamesPlayed: increment(stats.gamesPlayed || 0),
-          matchesPlayed: increment(stats.gamesPlayed || 0),
-          wins: increment(stats.wins || 0),
-          losses: increment(stats.losses || 0),
-          setterGames: increment(stats.setterGames || 0),
-          setterWins: increment(stats.setterWins || 0),
-          bestDailyWins: stats.wins || 0,
-          bestDailyWinStreak: stats.bestWinStreak || 0,
-          currentStreak: stats.currentWinStreak || 0,
-          bestStreak: stats.bestWinStreak || 0,
-          ...(Object.keys(sequenceMilestoneHits).length
-            ? { sequenceMilestoneHits }
-            : {}),
-          lastPlayedAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      );
-    });
 
   noShowIds.forEach((userId) => {
     batch.set(

@@ -131,7 +131,9 @@ export default function PreRegistersManager() {
   const [role, setRole] = useState("member");
   const [sex, setSex] = useState("male");
   const [isSaving, setIsSaving] = useState(false);
+  const [createError, setCreateError] = useState("");
   const [createdInvite, setCreatedInvite] = useState(null);
+  const [codeCopied, setCodeCopied] = useState(false);
   const [expandedInviteId, setExpandedInviteId] = useState(null);
 
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -178,10 +180,18 @@ export default function PreRegistersManager() {
 
     const phoneNumbers = onlyNumbers(phone);
 
-    if (!fullName.trim() || phoneNumbers.length !== 11) return;
+    if (!fullName.trim()) {
+      setCreateError("Informe o nome completo.");
+      return;
+    }
+    if (phoneNumbers.length !== 11) {
+      setCreateError("Informe um celular com DDD.");
+      return;
+    }
 
     try {
       setIsSaving(true);
+      setCreateError("");
 
       const created = await createPreRegister({
         fullName,
@@ -199,6 +209,13 @@ export default function PreRegistersManager() {
       setCreatedInvite(created);
 
       await loadPreRegisters();
+    } catch (error) {
+      console.error(error);
+      setCreateError(
+        error?.code === "permission-denied"
+          ? "Sua sessão não tem permissão de administrador. Recarregue o app e tente novamente."
+          : "Não foi possível criar o convite. Tente novamente.",
+      );
     } finally {
       setIsSaving(false);
     }
@@ -219,6 +236,41 @@ export default function PreRegistersManager() {
       );
     } finally {
       setIsDeleting(false);
+    }
+  }
+
+  async function handleCopyAccessCode() {
+    const code = createdInvite?.temporaryCode;
+    if (!code) return;
+
+    const copyWithSelection = () => {
+      const input = document.createElement("textarea");
+      input.value = code;
+      input.setAttribute("readonly", "");
+      input.style.position = "fixed";
+      input.style.opacity = "0";
+      document.body.appendChild(input);
+      input.select();
+      const copied = document.execCommand("copy");
+      input.remove();
+      if (!copied) throw new Error("O navegador recusou a cópia.");
+    };
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        try {
+          await navigator.clipboard.writeText(code);
+        } catch {
+          copyWithSelection();
+        }
+      } else {
+        copyWithSelection();
+      }
+      setCodeCopied(true);
+      window.setTimeout(() => setCodeCopied(false), 2000);
+    } catch (error) {
+      console.error(error);
+      setCodeCopied(false);
     }
   }
 
@@ -407,6 +459,12 @@ export default function PreRegistersManager() {
                 <UserPlus size={18} />
                 {isSaving ? "Salvando..." : "Adicionar"}
               </button>
+
+              {createError && (
+                <p className="border-l-2 border-[#ff5964] bg-[#ff5964]/10 px-3 py-2 text-xs font-bold text-[#ff9da4]" role="alert">
+                  {createError}
+                </p>
+              )}
             </div>
           </form>
         </div>
@@ -415,20 +473,20 @@ export default function PreRegistersManager() {
       {createdInvite && (
         <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/60 px-5 pb-5 backdrop-blur-sm">
           <div className="profile-edit-modal w-full max-w-[420px] p-5 text-center">
-            <p className="text-sm text-slate-400">Codigo de primeiro acesso</p>
+            <p className="text-sm text-slate-400">Código de primeiro acesso</p>
             <p className="mt-3 text-4xl text-[#ff713f]">
               {createdInvite.temporaryCode}
             </p>
             <p className="mt-3 text-sm text-slate-500">
-              Envie este codigo para {createdInvite.fullName}. Ele nao sera exibido novamente.
+              Envie este código para {createdInvite.fullName}. Ele não será exibido novamente.
             </p>
             <button
               type="button"
-              onClick={() => navigator.clipboard.writeText(createdInvite.temporaryCode)}
+              onClick={handleCopyAccessCode}
               className="admin-primary-action mt-5 flex h-12 w-full items-center justify-center gap-2 text-sm"
             >
-              <Copy size={17} />
-              Copiar codigo
+              {codeCopied ? <Check size={17} /> : <Copy size={17} />}
+              {codeCopied ? "Código copiado" : "Copiar código"}
             </button>
             <button
               type="button"

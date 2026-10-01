@@ -14,7 +14,7 @@ import {
   generateAccessCode,
   generateAccessCodeSalt,
   hashAccessCode,
-} from "../utils/accessCode";
+} from "./accessCodeService";
 
 const COLLECTION_NAME = "pre_registered_users";
 
@@ -39,6 +39,7 @@ export async function createPreRegister({
   role = "member",
   sex = "male",
 }) {
+  const accountRole = role || type || "member";
   const phoneWithCountry = `55${phone}`;
   const temporaryCode = generateAccessCode();
   const accessCodeSalt = generateAccessCodeSalt();
@@ -48,8 +49,8 @@ export async function createPreRegister({
     fullName: fullName.trim(),
     phone: phoneWithCountry,
 
-    type,
-    role,
+    type: accountRole,
+    role: accountRole,
     sex,
 
     enabled: true,

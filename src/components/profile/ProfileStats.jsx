@@ -88,14 +88,15 @@ export default function ProfileStats({ stats, missionsEnabled = false, isClaimin
     ? pendingSequenceIndex
     : selectedMissions.findIndex((item) => selectedValue < item.threshold);
   const focusIndex = currentMissionIndex < 0 ? selectedMissions.length - 1 : currentMissionIndex;
-  const totalReward =
-    claimable.reduce((total, item) => total + item.reward, 0) +
-    pendingSequenceRewards.reduce((total, item) => total + item.totalReward, 0);
-  const compactStart = Math.max(
-    0,
-    Math.min(focusIndex - 1, selectedMissions.length - 3),
-  );
-  const compactMissions = selectedMissions.slice(compactStart, compactStart + 3);
+
+  useEffect(() => {
+    if (showAllMissions || !selectedStat || !currentMissionRef.current) return;
+    currentMissionRef.current.scrollIntoView({ block: "center" });
+  }, [focusIndex, selectedStat, showAllMissions]);
+
+  const selectedReward = selectedStat
+    ? claimableByCategory[selectedStat] || 0
+    : 0;
   const completedCount = selectedMissions.filter((item) => {
     if (item.category === "currentStreak") {
       return (stats?.sequenceMilestoneHits?.[item.threshold] || 0) > 0;
@@ -158,15 +159,15 @@ export default function ProfileStats({ stats, missionsEnabled = false, isClaimin
 
       {missionsEnabled && selectedConfig && (
         <div className="profile-mission-panel profile-mission-panel--connected mt-2 p-3 pt-2">
-          <div className="space-y-1.5">
-            {compactMissions.map((item) => renderMissionRow(item))}
+          <div className="profile-mission-compact-list space-y-1.5">
+            {selectedMissions.map((item, index) => renderMissionRow(item, index === focusIndex))}
           </div>
 
           <div className="mt-2 flex items-center justify-between gap-2">
             <button type="button" onClick={() => setShowAllMissions(true)} className="profile-mission-more h-10 px-3 text-xs font-black">
               ver mais
             </button>
-            <button type="button" disabled={!totalReward || isClaiming} onClick={onClaimRewards} className="profile-mission-claim inline-flex h-10 items-center justify-center gap-2 px-4 text-xs font-black disabled:cursor-not-allowed disabled:opacity-35">
+            <button type="button" disabled={!selectedReward || isClaiming} onClick={() => onClaimRewards(selectedStat)} className="profile-mission-claim inline-flex h-10 items-center justify-center gap-2 px-4 text-xs font-black disabled:cursor-not-allowed disabled:opacity-35">
               <AlertCircle size={16} />{isClaiming ? "resgatando..." : "resgatar"}
             </button>
           </div>
@@ -191,12 +192,12 @@ export default function ProfileStats({ stats, missionsEnabled = false, isClaimin
             </div>
 
             <div className="mt-3 flex shrink-0 items-center justify-between gap-3">
-              {totalReward > 0 ? (
+              {selectedReward > 0 ? (
                 <span className="inline-flex items-center gap-1 text-sm font-black text-[#b8efc3]">
-                  <img src={coinIcon} alt="" className="h-5 w-5 object-contain" />{totalReward}c
+                  <img src={coinIcon} alt="" className="h-5 w-5 object-contain" />{selectedReward}c
                 </span>
               ) : <span />}
-              <button type="button" disabled={!totalReward || isClaiming} onClick={onClaimRewards} className="profile-mission-claim inline-flex h-10 items-center justify-center gap-2 px-4 text-xs font-black disabled:cursor-not-allowed disabled:opacity-35">
+              <button type="button" disabled={!selectedReward || isClaiming} onClick={() => onClaimRewards(selectedStat)} className="profile-mission-claim inline-flex h-10 items-center justify-center gap-2 px-4 text-xs font-black disabled:cursor-not-allowed disabled:opacity-35">
                 <AlertCircle size={16} />{isClaiming ? "resgatando..." : "resgatar"}
               </button>
             </div>

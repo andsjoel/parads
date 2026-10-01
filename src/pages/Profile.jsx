@@ -20,12 +20,12 @@ export default function Profile() {
     updateSessionData({ ...changes, user: nextUser });
   }
 
-  async function handleClaimMissionRewards() {
-    if (!userData?.id || isClaimingMissions) return;
+  async function handleClaimMissionRewards(category) {
+    if (!userData?.id || !category || isClaimingMissions) return;
 
     try {
       setIsClaimingMissions(true);
-      const result = await claimProfileMissionRewards(userData.id);
+      const result = await claimProfileMissionRewards(userData.id, category);
       const nextUser = {
         ...userData,
         progression: { ...userData.progression, coins: result.coins },

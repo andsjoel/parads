@@ -45,7 +45,7 @@ export const profileMissions = {
       threshold,
       getSequenceReward(threshold),
       threshold === 2
-        ? "Faça sua primeira sequência de 2 vitórias."
+        ? "Faça uma sequência de 2 vitórias."
         : `Vença ${threshold} partidas seguidas.`,
     ),
   ),

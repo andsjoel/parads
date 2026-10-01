@@ -1,5 +1,6 @@
 /* eslint-disable react/prop-types */
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   CalendarPlus,
   Crown,
@@ -7,18 +8,22 @@ import {
   Plus,
   RotateCcw,
   RotateCw,
+  Shuffle,
   ShieldCheck,
   Trash2,
   UserRoundPlus,
   Users,
   Venus,
   Volleyball,
+  X,
   XCircle,
 } from "lucide-react";
 
 import OrbitLoader from "../components/OrbitLoader";
+import CourtTeamsFrame from "../components/matches/CourtTeamsFrame";
 import { useAuth } from "../contexts/AuthContext";
 import generalBackground from "../assets/app-backgrounds/bg-geral.png";
+import { buildTeamDisplaySlots } from "../utils/teamSlots";
 import {
   addGhostPlayer,
   addVolleyMatchPlayer,
@@ -28,6 +33,7 @@ import {
   finishVolleyList,
   formInitialVolleyTeams,
   getVolleyAdminUsers,
+  moveMatchPlayerToTeamVacancy,
   recordTeamWin,
   redoVolleyListAction,
   removeMatchPlayer,
@@ -79,18 +85,27 @@ function getErrorMessage(error) {
   return error?.message || "Nao foi possivel atualizar a lista.";
 }
 
-function PlayerPill({ player, selected, onSelect, onEdit }) {
+function PlayerPill({ player, placeholderLabel = "Vaga", placeholderType = "default", displayAsSetter = false, selected, onSelect, onEdit, onSelectVacancy }) {
   if (!player) {
     return (
-      <div className="admin-volley-slot flex h-11 w-full items-center justify-center rounded-2xl border border-dashed border-white/10 bg-white/[0.025] text-xs font-black text-[#66736b]">
-        Vaga
-      </div>
+      <button
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          onSelectVacancy?.();
+        }}
+        disabled={!onSelectVacancy}
+        className={`admin-volley-slot admin-volley-slot--${placeholderType} flex h-11 w-full items-center justify-center rounded-2xl border border-dashed bg-white/[0.025] text-xs font-black disabled:cursor-default`}
+      >
+        {placeholderLabel}
+      </button>
     );
   }
 
-  const identityClass = player.isSetter && player.sex === "female"
+  const effectiveSetter = player.isSetter || displayAsSetter;
+  const identityClass = effectiveSetter && player.sex === "female"
     ? "admin-volley-player--setter-woman"
-    : player.isSetter
+    : effectiveSetter
       ? "admin-volley-player--setter"
       : player.sex === "female"
         ? "admin-volley-player--woman"
@@ -113,7 +128,11 @@ function PlayerPill({ player, selected, onSelect, onEdit }) {
       }}
       className={`admin-volley-player ${identityClass} ${selected ? "admin-volley-player--selected" : ""} group flex min-h-11 w-full flex-1 items-center border px-3 py-2 text-left transition active:scale-[0.98] ${selected ? "border-app-primary bg-app-primary/15" : "border-white/10 bg-white/[0.045]"}`}
     >
-      <p className="min-w-0 flex-1 truncate text-sm font-black text-[#fffaf0]">{player.displayName}</p>
+      <p className="min-w-0 truncate text-sm font-black text-[#fffaf0]">{player.displayName}</p>
+      {player.kind === "ghost" && (
+        <span className="admin-guest-mark ml-2 shrink-0" title="Convidado" aria-label="Convidado">C</span>
+      )}
+      <span className="flex-1" />
       {selected && (
         <button type="button" onClick={(event) => { event.stopPropagation(); onEdit(); }} className="ml-2 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-app-primary text-[#1a0504] active:scale-95" aria-label={`Editar ${player.displayName}`}>
           <Pencil size={15} />
@@ -132,17 +151,20 @@ function TeamCard({
   selectedEntryId,
   onSelectPlayer,
   canWin,
+  womenRuleMode = "one",
+  onSelectVacancy,
+  combined = false,
 }) {
-  const players = team?.players || [];
+  const slots = buildTeamDisplaySlots({ team, playersByEntryId, womenRuleMode });
 
   return (
-    <section className={`admin-volley-card admin-volley-team volley-team-frame volley-team-frame--${tone} p-3`}>
+    <section className={`admin-volley-card admin-volley-team volley-team-frame volley-team-frame--${tone} ${combined ? "admin-volley-team--combined" : ""} p-3`}>
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
           <h2 className="text-sm font-black text-[#fffaf0]">{title}</h2>
-          <p className="text-xs font-semibold text-[#9aa89f]">
-            {players.length}/6 jogadores {team?.wins ? `· ${team.wins}V` : ""}
-          </p>
+          {!combined && team?.wins > 0 && (
+            <p className="text-xs font-semibold text-[#9aa89f]">{team.wins}V</p>
+          )}
         </div>
 
         {canWin && (
@@ -157,21 +179,38 @@ function TeamCard({
       </div>
 
       <div className="space-y-2">
-        {Array.from({ length: 6 }).map((_, index) => {
-          const player = playersByEntryId[players[index]];
+        {slots.slice(0, 6).map((slot, index) => {
+          const player = slot.player;
 
           return (
             <PlayerPill
               key={`${team?.id || title}-${index}`}
               player={player}
+              placeholderLabel={slot.label}
+              placeholderType={slot.type}
+              displayAsSetter={slot.displayAsSetter}
               selected={selectedEntryId === player?.entryId}
               onSelect={() => onSelectPlayer(player)}
               onEdit={() => onSelectPlayer(player, true)}
+              onSelectVacancy={selectedEntryId && typeof onSelectVacancy === "function"
+                ? () => onSelectVacancy(team, slot.type)
+                : null}
             />
           );
         })}
       </div>
     </section>
+  );
+}
+
+function ResultSetterCard({ player, result }) {
+  return (
+    <div className={`admin-result-setter admin-result-setter--${result} flex h-12 items-center gap-3 border px-3`}>
+      <Crown size={17} className="shrink-0" />
+      <span className="min-w-0 flex-1 truncate text-sm font-black text-[#fffaf0]">
+        {player?.displayName || "Sem levantador"}
+      </span>
+    </div>
   );
 }
 
@@ -280,6 +319,7 @@ function CurrentListModal({
 
 function ListActionModal({ action, isLoading, onClose, onConfirm }) {
   const isStart = action === "start";
+  const isFinishDay = action === "finish-day";
   const Icon = isStart ? Volleyball : XCircle;
 
   return (
@@ -292,12 +332,14 @@ function ListActionModal({ action, isLoading, onClose, onConfirm }) {
             </div>
             <div>
               <h2 className="font-idv-title text-2xl">
-                {isStart ? "Iniciar partida?" : "Encerrar lista?"}
+                {isStart ? "Iniciar partida?" : isFinishDay ? "Finalizar pelada?" : "Encerrar lista?"}
               </h2>
               <p className="mt-1 text-sm text-white/48">
                 {isStart
                   ? "As confirmações serão congeladas e a presença na quadra começará vazia."
-                  : "A lista será finalizada e não poderá receber novas alterações."}
+                  : isFinishDay
+                    ? "Deseja encerrar a pelada de hoje? O relatorio do dia sera gerado."
+                    : "A lista será finalizada e não poderá receber novas alterações."}
               </p>
             </div>
           </div>
@@ -311,7 +353,7 @@ function ListActionModal({ action, isLoading, onClose, onConfirm }) {
             cancelar
           </button>
           <button type="button" onClick={onConfirm} disabled={isLoading} className={`${isStart ? "admin-primary-action" : "admin-delete-action"} flex h-11 items-center justify-center text-sm disabled:opacity-50`}>
-            {isLoading ? "aguarde..." : isStart ? "iniciar" : "encerrar"}
+            {isLoading ? "aguarde..." : isStart ? "iniciar" : isFinishDay ? "finalizar" : "encerrar"}
           </button>
         </div>
       </div>
@@ -321,6 +363,7 @@ function ListActionModal({ action, isLoading, onClose, onConfirm }) {
 
 export default function AdminVolleyList({ mode = "list" }) {
   const { isAdmin, userData } = useAuth();
+  const navigate = useNavigate();
   const isListManagement = mode === "list";
   const isMatchManagement = mode === "matches";
 
@@ -328,9 +371,6 @@ export default function AdminVolleyList({ mode = "list" }) {
   const [users, setUsers] = useState([]);
   const [date, setDate] = useState("");
   const [search, setSearch] = useState("");
-  const [ghostName, setGhostName] = useState("");
-  const [ghostSex, setGhostSex] = useState("male");
-  const [ghostSetter, setGhostSetter] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [busyAction, setBusyAction] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
@@ -347,6 +387,8 @@ export default function AdminVolleyList({ mode = "list" }) {
   const [showFormTeamsConfirm, setShowFormTeamsConfirm] = useState(false);
   const [selectedMatchPlayerId, setSelectedMatchPlayerId] = useState(null);
   const [swapMatchPair, setSwapMatchPair] = useState(null);
+  const [vacancySwapTarget, setVacancySwapTarget] = useState(null);
+  const [winConfirmationIndex, setWinConfirmationIndex] = useState(null);
 
   useEffect(() => {
     setIsLoading(true);
@@ -448,7 +490,7 @@ export default function AdminVolleyList({ mode = "list" }) {
       .toLowerCase()
       .includes(cleanManualSearch))
     .slice(0, 8);
-  const teams = list?.teams || [];
+  const teams = Array.isArray(list?.teams) ? list.teams : [];
   const returnTeam = list?.returnTeam || null;
   const isOpen = list?.status === "open";
   const isInProgress = list?.status === "in_progress";
@@ -571,20 +613,22 @@ export default function AdminVolleyList({ mode = "list" }) {
     });
   }
 
-  function handleAddGhost() {
-    if (!list || !ghostName.trim()) return;
+  async function handleAddGuest() {
+    if (!list || !search.trim()) return;
 
-    runAdminAction("ghost", async () => {
-      await addGhostPlayer({
+    let addedPlayer = null;
+    const added = await runAdminAction("guest", async () => {
+      addedPlayer = await addGhostPlayer({
         listId: list.id,
-        displayName: ghostName,
-        sex: ghostSex,
-        isSetter: ghostSetter,
+        displayName: search,
       });
-      setGhostName("");
-      setGhostSex("male");
-      setGhostSetter(false);
     });
+
+    if (added && addedPlayer) {
+      setSearch("");
+      setSelectedMatchPlayerId(addedPlayer.entryId);
+      setPlayerActionTargetId(addedPlayer.entryId);
+    }
   }
 
   function handleSelectPlayer(player, openEditor = false) {
@@ -669,6 +713,52 @@ export default function AdminVolleyList({ mode = "list" }) {
     }
   }
 
+  function cancelMatchSwap() {
+    setSwapMatchPair(null);
+    setVacancySwapTarget(null);
+    setSelectedMatchPlayerId(null);
+  }
+
+  function handleMoveToVacancy(team, slotType) {
+    if (!list || !team?.id || !selectedMatchPlayerId) return;
+
+    setVacancySwapTarget({
+      teamId: team.id,
+      slotType,
+    });
+  }
+
+  async function handleConfirmVacancySwap() {
+    if (!list || !vacancySwapTarget || !selectedMatchPlayerId) return;
+
+    const moved = await runAdminAction("move-to-vacancy", () =>
+      moveMatchPlayerToTeamVacancy({
+        listId: list.id,
+        entryId: selectedMatchPlayerId,
+        targetTeamId: vacancySwapTarget.teamId,
+        slotType: vacancySwapTarget.slotType,
+      }),
+    );
+
+    if (moved) {
+      setVacancySwapTarget(null);
+      setSelectedMatchPlayerId(null);
+    }
+  }
+
+  async function handleConfirmTeamWin() {
+    if (!list || winConfirmationIndex === null) return;
+
+    const recorded = await runAdminAction(`win-${winConfirmationIndex}`, () =>
+      recordTeamWin({
+        listId: list.id,
+        winningTeamIndex: winConfirmationIndex,
+      }),
+    );
+
+    if (recorded) setWinConfirmationIndex(null);
+  }
+
   if (!isAdmin) {
     return (
       <main className="admin-volley-page min-h-screen px-5 pb-28 pt-6 text-white" style={{ backgroundImage: `url(${generalBackground})` }}>
@@ -686,7 +776,7 @@ export default function AdminVolleyList({ mode = "list" }) {
 
   return (
     <main onClick={() => { setSelectedListPerson(null); setSelectedMatchPlayerId(null); }} className={`admin-volley-page ${isMatchManagement ? "admin-volley-page--matches" : ""} min-h-screen px-5 pb-28 pt-6 text-white`} style={{ backgroundImage: `url(${generalBackground})` }}>
-      <section className="mx-auto w-full max-w-[420px] space-y-4">
+      <section className={`mx-auto w-full max-w-[420px] ${isMatchManagement ? "flex flex-col gap-4" : "space-y-4"}`}>
         {isLoading ? (
           <div className="flex min-h-[240px] items-center justify-center">
             <OrbitLoader />
@@ -827,72 +917,70 @@ export default function AdminVolleyList({ mode = "list" }) {
 
                 {isMatchManagement && isInProgress && (teams.length > 0 || (list.history || []).length > 0 || canRedo) && (
                   <section className="admin-volley-card admin-volley-rules p-3">
-                    <button
-                      type="button"
-                      onClick={() => setShowRules((current) => !current)}
-                      className="flex h-10 w-full items-center justify-between rounded-2xl bg-white/[0.04] px-3 text-sm font-black text-[#fffaf0] active:scale-[0.98]"
-                    >
-                      <span>Regras</span>
-                      <span className="text-app-primary">
-                        {showRules ? "▲" : "▼"}
-                      </span>
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowRules((current) => !current)}
+                        className="flex h-10 min-w-0 flex-1 items-center justify-between rounded-2xl bg-white/[0.04] px-3 text-sm font-black text-[#fffaf0] active:scale-[0.98]"
+                      >
+                        <span>Regras</span>
+                        <span className="text-app-primary">
+                          {showRules ? "▲" : "▼"}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => runAdminAction(canRedo ? "redo" : "undo", () =>
+                          canRedo
+                            ? redoVolleyListAction({ listId: list.id })
+                            : undoVolleyListAction({ listId: list.id }),
+                        )}
+                        disabled={canRedo ? busyAction === "redo" : busyAction === "undo"}
+                        className="flex h-10 shrink-0 items-center justify-center gap-1 rounded-2xl border border-white/10 bg-white/[0.04] px-3 text-xs font-black text-[#fffaf0] active:scale-[0.98] disabled:opacity-50"
+                      >
+                        {canRedo ? <RotateCw size={13} /> : <RotateCcw size={13} />}
+                        {canRedo ? "Refazer" : "Desfazer"}
+                      </button>
+                    </div>
 
                     {showRules && (
-                      <div className="mt-2 grid grid-cols-3 gap-2">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            runAdminAction("women-rule", () =>
-                              toggleVolleyRule({
-                                listId: list.id,
-                                rule: "womenRuleMode",
-                                value: list.womenRuleMode === "two" ? "one" : "two",
-                              }),
-                            )
-                          }
-                          className={`h-10 rounded-2xl text-xs font-black active:scale-[0.98] ${
-                            list.womenRuleMode === "two"
-                              ? "bg-app-accent text-white"
-                              : "bg-white/[0.05] text-[#9aa89f]"
-                          }`}
-                        >
-                          {list.womenRuleMode === "two" ? "2 mulheres" : "1 mulher"}
-                        </button>
+                      <div className="mt-2 space-y-2">
+                        <div className="admin-rule-toggle admin-rule-toggle--women" aria-label="Regra de mulheres nos novos times">
+                          {[
+                            { value: "one", content: "1", label: "Uma mulher por time" },
+                            { value: "random", content: <Shuffle key="random-icon" size={16} />, label: "Uma garantida e outra aleatoria" },
+                            { value: "two", content: "2", label: "Duas mulheres por time" },
+                          ].map(({ value, content, label }) => (
+                            <button
+                              key={value}
+                              type="button"
+                              aria-label={label}
+                              title={label}
+                              onClick={() => runAdminAction("women-rule", () =>
+                                toggleVolleyRule({ listId: list.id, rule: "womenRuleMode", value }),
+                              )}
+                              className={list.womenRuleMode === value ? "is-active is-women" : ""}
+                            >
+                              {content}
+                            </button>
+                          ))}
+                        </div>
 
-                        <button
-                          type="button"
-                          onClick={() =>
-                            runAdminAction("exit-rule", () =>
-                              toggleVolleyRule({
-                                listId: list.id,
-                                rule: "exitAfterTwoWins",
-                                value: !list.exitAfterTwoWins,
-                              }),
-                            )
-                          }
-                          className={`h-10 rounded-2xl text-xs font-black active:scale-[0.98] ${
-                            list.exitAfterTwoWins
-                              ? "bg-app-primary text-[#17231f]"
-                              : "bg-white/[0.05] text-[#9aa89f]"
-                          }`}
-                        >
-                          Sai 2
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => runAdminAction(canRedo ? "redo" : "undo", () =>
-                            canRedo
-                              ? redoVolleyListAction({ listId: list.id })
-                              : undoVolleyListAction({ listId: list.id }),
-                          )}
-                          disabled={canRedo ? busyAction === "redo" : busyAction === "undo"}
-                          className="flex h-10 items-center justify-center gap-1 rounded-2xl border border-white/10 bg-white/[0.04] text-xs font-black text-[#fffaf0] active:scale-[0.98]"
-                        >
-                          {canRedo ? <RotateCw size={13} /> : <RotateCcw size={13} />}
-                          {canRedo ? "Refazer" : "Desfazer"}
-                        </button>
+                        <div className="admin-rule-toggle" aria-label="Regra de duas vitorias">
+                          {[[false, "Nao sai"], [true, "Sai 2"]].map(([value, label]) => (
+                            <button
+                              key={String(value)}
+                              type="button"
+                              onClick={() => runAdminAction("exit-rule", () =>
+                                toggleVolleyRule({ listId: list.id, rule: "exitAfterTwoWins", value }),
+                              )}
+                              className={list.exitAfterTwoWins === value ? "is-active" : ""}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </section>
@@ -908,10 +996,12 @@ export default function AdminVolleyList({ mode = "list" }) {
                         playersByEntryId={playersByEntryId}
                         selectedEntryId={selectedMatchPlayerId}
                         onSelectPlayer={handleSelectPlayer}
+                        womenRuleMode={returnTeam.womenRuleMode || list.womenRuleMode}
+                        onSelectVacancy={handleMoveToVacancy}
                       />
                     )}
 
-                    <div className="admin-volley-teams-grid grid grid-cols-1 gap-3">
+                    <CourtTeamsFrame className="admin-volley-teams-grid admin-match-court-teams">
                       {teams.slice(0, 2).map((team, index) => (
                         <TeamCard
                           key={team.id}
@@ -919,20 +1009,16 @@ export default function AdminVolleyList({ mode = "list" }) {
                           title={`Time ${index + 1}`}
                           team={team}
                           canWin={teams.length > 1}
-                          onWin={() =>
-                            runAdminAction(`win-${index}`, () =>
-                              recordTeamWin({
-                                listId: list.id,
-                                winningTeamIndex: index,
-                              }),
-                            )
-                          }
+                          onWin={() => setWinConfirmationIndex(index)}
                           playersByEntryId={playersByEntryId}
                           selectedEntryId={selectedMatchPlayerId}
                           onSelectPlayer={handleSelectPlayer}
+                          womenRuleMode={team.womenRuleMode || list.womenRuleMode}
+                          onSelectVacancy={handleMoveToVacancy}
+                          combined
                         />
                       ))}
-                    </div>
+                    </CourtTeamsFrame>
 
                     {teams.slice(2).map((team, index) => (
                       <TeamCard
@@ -943,6 +1029,8 @@ export default function AdminVolleyList({ mode = "list" }) {
                         playersByEntryId={playersByEntryId}
                         selectedEntryId={selectedMatchPlayerId}
                         onSelectPlayer={handleSelectPlayer}
+                        womenRuleMode={team.womenRuleMode || list.womenRuleMode}
+                        onSelectVacancy={handleMoveToVacancy}
                       />
                     ))}
                   </>
@@ -985,7 +1073,18 @@ export default function AdminVolleyList({ mode = "list" }) {
                             </button>
                           ))}
                           {!availableUsers.length && (
-                            <p className="px-3 py-2 text-xs font-bold text-[#9aa89f]">Nenhum jogador encontrado.</p>
+                            <button
+                              type="button"
+                              onClick={handleAddGuest}
+                              disabled={busyAction === "guest"}
+                              className="admin-add-guest flex min-h-11 w-full items-center justify-between gap-3 px-3 py-2 text-left text-xs font-black disabled:opacity-50"
+                            >
+                              <span className="min-w-0">
+                                <small className="block text-[10px] text-[#9aa89f]">Nenhum jogador encontrado</small>
+                                <span className="block truncate text-[#fffaf0]">adicionar como convidado</span>
+                              </span>
+                              <UserRoundPlus size={17} className="shrink-0 text-app-primary" />
+                            </button>
                           )}
                         </div>
                       )}
@@ -1022,60 +1121,16 @@ export default function AdminVolleyList({ mode = "list" }) {
                       )}
                     </section>
 
-                    <section className="admin-volley-card admin-volley-ghost p-3">
-                      <div className="mb-3 flex items-center gap-2">
-                        <Volleyball size={17} className="text-app-primary" />
-                        <h2 className="text-sm font-black text-[#fffaf0]">
-                          Ghost
-                        </h2>
-                      </div>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmAction("finish-day")}
+                      disabled={busyAction === "finish"}
+                      className="admin-finish-day flex h-12 w-full items-center justify-center gap-2 text-sm font-black text-red-200 disabled:opacity-50"
+                    >
+                      <XCircle size={17} />
+                      {busyAction === "finish" ? "finalizando..." : "Finalizar Pelada"}
+                    </button>
 
-                      <input
-                        value={ghostName}
-                        onChange={(event) => setGhostName(event.target.value)}
-                        placeholder="Nome do jogador temporario"
-                        className="mb-2 h-11 w-full rounded-2xl border border-white/10 bg-white/[0.06] px-4 text-sm text-white outline-none placeholder:text-[#66736b] focus:border-app-primary/40"
-                      />
-
-                      <div className="mb-2 grid grid-cols-2 gap-2">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setGhostSex((current) =>
-                              current === "female" ? "male" : "female",
-                            )
-                          }
-                          className={`h-10 rounded-2xl text-xs font-black ${
-                            ghostSex === "female"
-                              ? "bg-app-accent text-white"
-                              : "bg-white/[0.05] text-[#9aa89f]"
-                          }`}
-                        >
-                          {ghostSex === "female" ? "Mulher" : "Homem"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setGhostSetter((current) => !current)}
-                          className={`h-10 rounded-2xl text-xs font-black ${
-                            ghostSetter
-                              ? "bg-app-primary text-[#17231f]"
-                              : "bg-white/[0.05] text-[#9aa89f]"
-                          }`}
-                        >
-                          Levantador
-                        </button>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={handleAddGhost}
-                        disabled={!ghostName.trim() || busyAction === "ghost"}
-                        className="flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-app-primary text-sm font-black text-[#17231f] active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-white/[0.05] disabled:text-[#66736b]"
-                      >
-                        <Plus size={16} />
-                        Adicionar ghost
-                      </button>
-                    </section>
                   </>
                 )}
               </>
@@ -1137,7 +1192,9 @@ export default function AdminVolleyList({ mode = "list" }) {
             if (confirmAction === "start") {
               await runAdminAction("start-match", () => startVolleyMatch({ listId: list.id }));
             } else {
-              await runAdminAction("finish", () => finishVolleyList({ listId: list.id }));
+              const finished = await runAdminAction("finish", () => finishVolleyList({ listId: list.id }));
+              if (!finished) return;
+              if (confirmAction === "finish-day") navigate("/admin/reports");
             }
             setConfirmAction(null);
           }}
@@ -1247,14 +1304,38 @@ export default function AdminVolleyList({ mode = "list" }) {
                   Deseja trocar {swapMatchPair.first.displayName} com {swapMatchPair.second.displayName}?
                 </p>
               </div>
-              <button type="button" onClick={() => setSwapMatchPair(null)} disabled={busyAction === "swap-match-players"} className="profile-modal-close flex h-9 w-9 shrink-0 items-center justify-center" aria-label="Fechar">
+              <button type="button" onClick={cancelMatchSwap} disabled={busyAction === "swap-match-players"} className="profile-modal-close flex h-9 w-9 shrink-0 items-center justify-center" aria-label="Fechar">
                 <XCircle size={17} />
               </button>
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <button type="button" onClick={() => setSwapMatchPair(null)} disabled={busyAction === "swap-match-players"} className="register-outline-action h-11 text-sm">cancelar</button>
+              <button type="button" onClick={cancelMatchSwap} disabled={busyAction === "swap-match-players"} className="register-outline-action h-11 text-sm">cancelar</button>
               <button type="button" onClick={handleConfirmMatchSwap} disabled={busyAction === "swap-match-players"} className="admin-primary-action flex h-11 items-center justify-center text-sm disabled:opacity-50">
                 {busyAction === "swap-match-players" ? "trocando..." : "trocar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {vacancySwapTarget && selectedMatchPlayerId && (
+        <div onClick={(event) => event.stopPropagation()} className="fixed inset-0 z-[95] flex items-end justify-center bg-black/70 px-5 pb-5 backdrop-blur-sm">
+          <div className="profile-edit-modal w-full max-w-[420px] p-5 text-white">
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <h2 className="font-idv-title text-2xl">Trocar posicao?</h2>
+                <p className="mt-2 text-sm leading-relaxed text-[#9aa89f]">
+                  Deseja trocar {playersByEntryId[selectedMatchPlayerId]?.displayName || "jogador"} com {vacancySwapTarget.slotType === "setter" ? "vaga de levantador" : vacancySwapTarget.slotType === "woman" ? "vaga feminina" : "vaga vazia"}?
+                </p>
+              </div>
+              <button type="button" onClick={cancelMatchSwap} disabled={busyAction === "move-to-vacancy"} className="profile-modal-close flex h-9 w-9 shrink-0 items-center justify-center" aria-label="Fechar">
+                <XCircle size={17} />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" onClick={cancelMatchSwap} disabled={busyAction === "move-to-vacancy"} className="register-outline-action h-11 text-sm">cancelar</button>
+              <button type="button" onClick={handleConfirmVacancySwap} disabled={busyAction === "move-to-vacancy"} className="admin-primary-action flex h-11 items-center justify-center text-sm disabled:opacity-50">
+                {busyAction === "move-to-vacancy" ? "trocando..." : "trocar"}
               </button>
             </div>
           </div>
@@ -1282,6 +1363,55 @@ export default function AdminVolleyList({ mode = "list" }) {
           </div>
         </div>
       )}
+
+      {winConfirmationIndex !== null && teams[winConfirmationIndex] && teams[winConfirmationIndex === 0 ? 1 : 0] && (() => {
+        const winnerTeam = teams[winConfirmationIndex];
+        const loserTeam = teams[winConfirmationIndex === 0 ? 1 : 0];
+        const findSetter = (team) => {
+          const teamPlayers = (team.players || []).map((entryId) => playersByEntryId[entryId]).filter(Boolean);
+          return teamPlayers.find((player) => player.isSetter)
+            || teamPlayers.find((player) => player.entryId === team.temporarySetterEntryId)
+            || null;
+        };
+
+        return (
+          <div className="fixed inset-0 z-[95] flex items-end justify-center bg-black/70 px-5 pb-5 backdrop-blur-sm">
+            <div className="profile-edit-modal admin-result-modal w-full max-w-[420px] p-5 text-white">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <h2 className="font-idv-title text-2xl">Confirmar vencedor</h2>
+                <button type="button" onClick={() => setWinConfirmationIndex(null)} disabled={busyAction.startsWith("win-")} className="profile-modal-close flex h-9 w-9 shrink-0 items-center justify-center" aria-label="Fechar">
+                  <XCircle size={17} />
+                </button>
+              </div>
+
+              <p className="admin-result-label admin-result-label--winner mb-2 flex items-baseline gap-2 uppercase">
+                <strong>Venceu</strong>
+                <span>Time de:</span>
+              </p>
+              <ResultSetterCard player={findSetter(winnerTeam)} result="winner" />
+
+              <div className="flex h-14 items-center justify-center">
+                <span className="admin-result-versus inline-flex h-9 w-10 items-center justify-center bg-red-500 text-white">
+                  <X size={20} strokeWidth={3.2} />
+                </span>
+              </div>
+
+              <p className="admin-result-label admin-result-label--loser mb-2 flex items-baseline gap-2 uppercase">
+                <strong>Perdeu</strong>
+                <span>Time de:</span>
+              </p>
+              <ResultSetterCard player={findSetter(loserTeam)} result="loser" />
+
+              <div className="mt-5 grid grid-cols-2 gap-2">
+                <button type="button" onClick={() => setWinConfirmationIndex(null)} disabled={busyAction.startsWith("win-")} className="register-outline-action h-11 text-sm">cancelar</button>
+                <button type="button" onClick={handleConfirmTeamWin} disabled={busyAction.startsWith("win-")} className="admin-primary-action flex h-11 items-center justify-center text-sm disabled:opacity-50">
+                  {busyAction.startsWith("win-") ? "confirmando..." : "confirmar"}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
     </main>
   );

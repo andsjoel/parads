@@ -57,8 +57,8 @@ export async function deleteUserCascadeByPreRegister(preRegisterId) {
 
 export async function createUserBaseData({ uid, preRegister, username, authEmail }) {
   const cleanUsername = username.trim().toLowerCase();
-  const type = preRegister.type || "member";
-  const role = preRegister.role || "member";
+  const role = preRegister.role || preRegister.type || "member";
+  const type = role;
   const sex = preRegister.sex || "male";
   const now = new Date();
 
@@ -69,6 +69,7 @@ export async function createUserBaseData({ uid, preRegister, username, authEmail
   const statsRef = doc(db, "user_stats", uid);
   const inventoryRef = doc(db, "user_inventory", uid);
   const showcaseRef = doc(db, "user_showcase", uid);
+  const publicProfileRef = doc(db, "public_profiles", uid);
   const preRegisterRef = doc(db, "pre_registered_users", preRegister.id);
 
   batch.set(userRef, {
@@ -98,6 +99,25 @@ export async function createUserBaseData({ uid, preRegister, username, authEmail
     },
 
     createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+
+  batch.set(publicProfileRef, {
+    fullName: preRegister.fullName,
+    username: cleanUsername,
+    type,
+    sex,
+    role,
+    profile: {
+      displayName: preRegister.fullName,
+      statusMessage: "",
+      selectedBackgroundId: "bg-default",
+      selectedProfilePicId: "pic-default",
+      selectedProfilePicBorderId: null,
+      selectedDisplayCardId: "display-card-orange",
+      selectedStatusIcon: "âœ¦",
+    },
+    progression: { coins: INITIAL_COIN_BALANCE },
     updatedAt: serverTimestamp(),
   });
 

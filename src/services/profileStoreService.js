@@ -23,6 +23,7 @@ export async function purchaseProfileItem({ uid, type, itemId }) {
   if (!Number.isInteger(price) || price < 0) throw new Error("Preço inválido.");
 
   const userRef = doc(db, "users", uid);
+  const publicProfileRef = doc(db, "public_profiles", uid);
   const inventoryRef = doc(db, "user_inventory", uid);
 
   return runTransaction(db, async (transaction) => {
@@ -56,6 +57,10 @@ export async function purchaseProfileItem({ uid, type, itemId }) {
       "progression.coins": nextBalance,
       updatedAt: serverTimestamp(),
     });
+    transaction.set(publicProfileRef, {
+      progression: { coins: nextBalance },
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
     transaction.update(inventoryRef, {
       [section.field]: nextInventory[section.field],
       updatedAt: serverTimestamp(),

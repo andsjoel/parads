@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { LogOut, Settings, ShieldCheck, UserPlus, Users, Volleyball, X } from "lucide-react";
+import { BarChart3, LogOut, Settings, ShieldCheck, UserPlus, Users, Volleyball, X } from "lucide-react";
 
 import { useAuth } from "../contexts/AuthContext";
 import { logoutUser } from "../services/authServices";
@@ -15,6 +15,7 @@ const adminServices = [
   { title: "Convites", description: "Quem pode entrar pro time", icon: UserPlus, to: "/admin/pre-registers", tone: "invites" },
   { title: "Lista", description: "Presenca e confirmacoes", icon: ShieldCheck, to: "/admin/volley-list", tone: "list" },
   { title: "Partidas", description: "Chegada, times e resultados", icon: Volleyball, to: "/admin/matches", tone: "matches" },
+  { title: "Relatórios", description: "Números e publicações", icon: BarChart3, to: "/admin/reports", tone: "reports" },
 ];
 
 export default function Admin() {

@@ -11,6 +11,8 @@ import { Link } from "react-router-dom";
 
 import { useAuth } from "../contexts/AuthContext";
 import OrbitLoader from "../components/OrbitLoader";
+import CourtTeamsFrame from "../components/matches/CourtTeamsFrame";
+import { buildTeamDisplaySlots } from "../utils/teamSlots";
 import generalBackground from "../assets/app-backgrounds/bg-geral.png";
 import waitingListBackground from "../assets/app-backgrounds/bg-waiting-list.png";
 import waitingMatchBackground from "../assets/app-backgrounds/bg-waiting-match.png";
@@ -156,10 +158,11 @@ function FrozenPresenceModal({ list, profilesById, onOpenProfile, onClose }) {
   );
 }
 
-function LivePlayer({ player, profileBundle, onOpen }) {
-  const identityClass = player.isSetter && player.sex === "female"
+function LivePlayer({ player, profileBundle, onOpen, displayAsSetter = false }) {
+  const effectiveSetter = player.isSetter || displayAsSetter;
+  const identityClass = effectiveSetter && player.sex === "female"
     ? "admin-volley-player--setter-woman"
-    : player.isSetter
+    : effectiveSetter
       ? "admin-volley-player--setter"
       : player.sex === "female"
         ? "admin-volley-player--woman"
@@ -178,32 +181,47 @@ function LivePlayer({ player, profileBundle, onOpen }) {
   );
 }
 
-function LiveTeam({ title, team, tone = "orange", playersByEntryId, profilesById, onOpenProfile }) {
-  const players = team?.players || [];
-
+function ReturnCrownMark() {
   return (
-    <section className={`match-panel volley-team-frame volley-team-frame--${tone} p-4`}>
+    <svg aria-hidden="true" viewBox="0 0 128 92" className="match-return-crown">
+      <path
+        d="M17 30 C18 25 23 25 27 30 C34 38 40 43 45 44 C48 37 49 25 55 16 C58 11 63 12 66 18 C70 27 74 39 78 43 C84 40 92 32 101 25 C106 21 111 25 109 31 C106 45 103 60 99 72 C77 77 50 77 27 70 C24 58 20 43 17 30 Z M28 62 C47 68 77 69 100 63"
+        fill="none"
+        stroke="#f7bd37"
+        strokeWidth="4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function LiveTeam({ title, team, tone = "orange", womenRuleMode, playersByEntryId, profilesById, onOpenProfile, featured = false }) {
+  const slots = buildTeamDisplaySlots({ team, playersByEntryId, womenRuleMode });
+
+  const panel = (
+    <section className={`match-panel volley-team-frame volley-team-frame--${tone} ${featured ? "match-return-team" : ""} p-4`}>
       <div className="mb-3 flex items-center justify-between">
         <div>
           <h2 className="text-sm font-black text-[#fffaf0]">{title}</h2>
-          <p className="text-xs font-semibold text-[#9aa89f]">
-            {players.length}/6 {team?.wins ? `· ${team.wins} vitorias` : ""}
-          </p>
+          {!featured && team?.wins > 0 && (
+            <p className="text-xs font-semibold text-[#9aa89f]">{team.wins} vitorias</p>
+          )}
         </div>
         <Volleyball size={18} className="text-app-primary" />
       </div>
 
       <div className="space-y-2">
-        {Array.from({ length: 6 }).map((_, index) => {
-          const player = playersByEntryId[players[index]];
+        {slots.map((slot, index) => {
+          const player = slot.player;
 
           if (!player) {
             return (
               <div
                 key={`${team?.id}-${index}`}
-                className="flex h-11 items-center justify-center rounded-2xl border border-dashed border-white/10 bg-white/[0.025] text-xs font-black text-[#66736b]"
+                className={`admin-volley-slot admin-volley-slot--${slot.type} flex h-11 items-center justify-center rounded-2xl border border-dashed bg-white/[0.025] text-xs font-black`}
               >
-                Vaga
+                {slot.label}
               </div>
             );
           }
@@ -212,6 +230,7 @@ function LiveTeam({ title, team, tone = "orange", playersByEntryId, profilesById
             <LivePlayer
               key={player.entryId}
               player={player}
+              displayAsSetter={slot.displayAsSetter}
               profileBundle={profilesById[player.userId]}
               onOpen={() => onOpenProfile(player)}
             />
@@ -220,34 +239,43 @@ function LiveTeam({ title, team, tone = "orange", playersByEntryId, profilesById
       </div>
     </section>
   );
+
+  if (!featured) return panel;
+
+  return (
+    <div className="match-return-wrap">
+      <ReturnCrownMark />
+      {panel}
+    </div>
+  );
 }
 
-function CourtTeamColumn({ title, team, tone, playersByEntryId, profilesById, onOpenProfile }) {
-  const players = team?.players || [];
+function CourtTeamColumn({ title, team, tone, womenRuleMode, playersByEntryId, profilesById, onOpenProfile }) {
+  const slots = buildTeamDisplaySlots({ team, playersByEntryId, womenRuleMode });
 
   return (
     <section className={`match-court-team-column match-court-team-column--${tone}`}>
       <header className="match-court-team-header flex items-center justify-between gap-2 px-3 py-3">
         <div>
           <h3 className="text-base font-black text-[#fffaf0]">{title}</h3>
-          <p className="text-xs font-black text-[#9aa89f]">{players.length}/6</p>
         </div>
         <Volleyball size={18} />
       </header>
 
       <div className="space-y-1.5 px-2 pb-2">
-        {Array.from({ length: 6 }).map((_, index) => {
-          const player = playersByEntryId[players[index]];
+        {slots.map((slot, index) => {
+          const player = slot.player;
           return player ? (
             <LivePlayer
               key={player.entryId}
               player={player}
+              displayAsSetter={slot.displayAsSetter}
               profileBundle={profilesById[player.userId]}
               onOpen={() => onOpenProfile(player)}
             />
           ) : (
-            <div key={`${team?.id}-${index}`} className="match-court-empty flex h-11 items-center px-3 text-xs font-black text-[#66736b]">
-              Vaga
+            <div key={`${team?.id}-${index}`} className={`match-court-empty match-court-empty--${slot.type} flex h-11 items-center justify-center px-2 text-center text-xs font-black`}>
+              {slot.label}
             </div>
           );
         })}
@@ -593,7 +621,9 @@ export default function MatchList({ mode = "matches" }) {
               <LiveTeam
                 title="Volta"
                 tone="pink"
+                featured
                 team={list.returnTeam}
+                womenRuleMode={list.returnTeam.womenRuleMode || list.womenRuleMode}
                 playersByEntryId={playersByEntryId}
                 profilesById={profilesById}
                 onOpenProfile={handleOpenProfile}
@@ -601,10 +631,10 @@ export default function MatchList({ mode = "matches" }) {
             )}
 
             {list.teamsFormedAt && <section className="match-court-combined">
-              <div className="match-court-teams grid grid-cols-2">
-                <CourtTeamColumn title="Time 1" team={teams[0]} tone="orange" playersByEntryId={playersByEntryId} profilesById={profilesById} onOpenProfile={handleOpenProfile} />
-                <CourtTeamColumn title="Time 2" team={teams[1]} tone="cyan" playersByEntryId={playersByEntryId} profilesById={profilesById} onOpenProfile={handleOpenProfile} />
-              </div>
+              <CourtTeamsFrame>
+                <CourtTeamColumn title="Time 1" team={teams[0]} tone="orange" womenRuleMode={teams[0].womenRuleMode || list.womenRuleMode} playersByEntryId={playersByEntryId} profilesById={profilesById} onOpenProfile={handleOpenProfile} />
+                <CourtTeamColumn title="Time 2" team={teams[1]} tone="cyan" womenRuleMode={teams[1].womenRuleMode || list.womenRuleMode} playersByEntryId={playersByEntryId} profilesById={profilesById} onOpenProfile={handleOpenProfile} />
+              </CourtTeamsFrame>
             </section>}
 
             {list.teamsFormedAt && teams.slice(2).map((team, index) => (
@@ -613,6 +643,7 @@ export default function MatchList({ mode = "matches" }) {
                 tone={index % 2 === 0 ? "green" : "pink"}
                 title={`${index + 1}º Proxima`}
                 team={team}
+                womenRuleMode={team.womenRuleMode || list.womenRuleMode}
                 playersByEntryId={playersByEntryId}
                 profilesById={profilesById}
                 onOpenProfile={handleOpenProfile}

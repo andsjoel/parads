@@ -6,10 +6,12 @@ import {
   getPendingSequenceRewards,
 } from "../data/profileMissions";
 
-export async function claimProfileMissionRewards(uid) {
+export async function claimProfileMissionRewards(uid, category) {
+  if (!category) throw new Error("Categoria de missao invalida.");
   if (!uid) throw new Error("Usuário inválido.");
 
   const userRef = doc(db, "users", uid);
+  const publicProfileRef = doc(db, "public_profiles", uid);
   const statsRef = doc(db, "user_stats", uid);
 
   return runTransaction(db, async (transaction) => {
@@ -24,8 +26,12 @@ export async function claimProfileMissionRewards(uid) {
 
     const user = userSnap.data();
     const stats = statsSnap.data();
-    const claimable = getClaimableMissions(stats);
-    const sequenceRewards = getPendingSequenceRewards(stats);
+    const claimable = getClaimableMissions(stats).filter(
+      (item) => item.category === category,
+    );
+    const sequenceRewards = category === "currentStreak"
+      ? getPendingSequenceRewards(stats)
+      : [];
     const currentCoins = user.progression?.coins || 0;
 
     if (!claimable.length && !sequenceRewards.length) {
@@ -46,9 +52,17 @@ export async function claimProfileMissionRewards(uid) {
       "progression.coins": currentCoins + reward,
       updatedAt: serverTimestamp(),
     });
+    transaction.set(publicProfileRef, {
+      progression: { coins: currentCoins + reward },
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+    const claimedSequenceMilestoneHits = category === "currentStreak"
+      ? stats.sequenceMilestoneHits || {}
+      : stats.claimedSequenceMilestoneHits || {};
+
     transaction.update(statsRef, {
       claimedMissionIds,
-      claimedSequenceMilestoneHits: stats.sequenceMilestoneHits || {},
+      claimedSequenceMilestoneHits,
       updatedAt: serverTimestamp(),
     });
 
@@ -57,7 +71,7 @@ export async function claimProfileMissionRewards(uid) {
       stats: {
         ...stats,
         claimedMissionIds,
-        claimedSequenceMilestoneHits: stats.sequenceMilestoneHits || {},
+        claimedSequenceMilestoneHits,
       },
       reward,
     };

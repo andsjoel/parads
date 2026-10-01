@@ -1,0 +1,101 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
+    }
+
+    match /pre_registered_users/{phone} {
+  allow read: if true;
+  allow create, delete: if isAdmin();
+
+  allow update: if isAdmin() || (
+    signedIn()
+    && resource.data.enabled == true
+    && resource.data.claimed != true
+    && request.resource.data.claimed == true
+    && request.resource.data.userId == request.auth.uid
+    && request.resource.data
+        .diff(resource.data)
+        .affectedKeys()
+        .hasOnly(["claimed", "userId", "claimedAt"])
+    && getAfter(
+      /databases/$(database)/documents/users/$(request.auth.uid)
+    ).data.phone == resource.data.phone
+  );
+}
+
+    match /users/{userId} {
+      allow read: if isSelf(userId) || isAdmin();
+      allow create: if isSelf(userId);
+      allow update: if isSelf(userId) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /public_profiles/{userId} {
+      allow read: if signedIn();
+      allow create, update: if isSelf(userId) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /usernames/{username} {
+      allow read: if true;
+      allow create: if signedIn();
+      allow delete: if isAdmin();
+    }
+
+    match /user_stats/{userId} {
+      allow read: if signedIn();
+      allow create: if isSelf(userId) || isAdmin();
+      allow update: if isSelf(userId) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /user_inventory/{userId} {
+      allow read: if signedIn();
+      allow create, update: if isSelf(userId) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /user_showcase/{userId} {
+      allow read: if signedIn();
+      allow create, update: if isSelf(userId) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /volley_lists/{listId} {
+      allow read: if signedIn();
+
+      // Membros entram/saem da lista aberta.
+      // Admin opera a pelada inteira.
+      allow create, update: if signedIn();
+      allow delete: if isAdmin();
+    }
+
+    match /volley_reports/{reportId} {
+      allow read: if signedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /app_metrics/{metricId} {
+      allow read: if signedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /feed_posts/{postId} {
+      allow read: if signedIn();
+      allow create, update, delete: if isAdmin();
+    }
+  }
+}

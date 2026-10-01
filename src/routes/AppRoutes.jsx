@@ -13,6 +13,7 @@ import ProtectedRoute from "../components/ProtectedRoute";
 import Shop from "../pages/Shop";
 
 import AdminVolleyList from "../pages/AdminVolleyList";
+import AdminReports from "../pages/AdminReports";
 
 export default function AppRoutes() {
   return (
@@ -43,6 +44,7 @@ export default function AppRoutes() {
 
         <Route path="admin/volley-list" element={<AdminVolleyList mode="list" />} />
         <Route path="admin/matches" element={<AdminVolleyList mode="matches" />} />
+        <Route path="admin/reports" element={<AdminReports />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/login" replace />} />
