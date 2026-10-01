@@ -14,6 +14,7 @@ import {
   syncAllPublicProfilesOnce,
 } from "../services/publicProfileService";
 import { subscribeFeedPosts } from "../services/volleyReportService";
+import { buildMockProfileBundle } from "../services/volleyListService";
 
 function formatDate(value) {
   if (!value) return "";
@@ -51,11 +52,24 @@ export default function Feed() {
 
   useEffect(() => {
     const rankingItems = posts.flatMap((post) => post.payload?.ranking || []);
-    const snapshotProfiles = rankingItems.reduce((result, item) => (
-      item.profileBundle && item.userId
-        ? { ...result, [item.userId]: item.profileBundle }
-        : result
-    ), {});
+    const snapshotProfiles = rankingItems.reduce((result, item, index) => {
+      if (!item.userId) return result;
+      if (item.profileBundle) {
+        return { ...result, [item.userId]: item.profileBundle };
+      }
+      if (item.userId.startsWith("mock_")) {
+        return {
+          ...result,
+          [item.userId]: buildMockProfileBundle({
+            userId: item.userId,
+            displayName: item.displayName,
+            sex: item.sex || "male",
+            isSetter: Boolean(item.isSetter),
+          }, index),
+        };
+      }
+      return result;
+    }, {});
     const remoteIds = [...new Set(rankingItems.map((item) => item.userId).filter(Boolean))]
       .filter((id) => !snapshotProfiles[id]);
 

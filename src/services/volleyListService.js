@@ -34,7 +34,7 @@ function pickMockAsset(catalog, index, offset = 0) {
   return catalog[(index + offset) % catalog.length]?.id || null;
 }
 
-function buildMockProfileBundle(player, index) {
+export function buildMockProfileBundle(player, index) {
   const selectedProfilePicId = pickMockAsset(profilePicsCatalog, index);
   const selectedProfilePicBorderId = pickMockAsset(
     profilePicBordersCatalog,
@@ -1790,6 +1790,8 @@ export async function finishVolleyList({ listId }) {
         entryId: player.entryId,
         userId: player.userId || null,
         displayName: player.displayName || "Jogador",
+        sex: player.sex || "male",
+        isSetter: Boolean(player.isSetter),
         wins: player.stats?.wins || 0,
         gamesPlayed: player.stats?.gamesPlayed || 0,
         profileBundle: list.mockProfiles?.[player.userId] || null,
