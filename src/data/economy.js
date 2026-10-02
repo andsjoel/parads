@@ -10,6 +10,7 @@ export const ITEM_RARITIES = {
   superior: { label: "Superior", price: 50, color: "#ff7043", order: 6 },
   mythic: { label: "Mítico", price: 60, color: "#ff4f86", order: 7 },
   exclusive: { label: "Exclusivo", price: 100, color: "#fff2b2", order: 8 },
+  beyond: { label: "Além", price: 500, color: "#f5f3ff", order: 9 },
 };
 
 export function coinPrice(amount) {
