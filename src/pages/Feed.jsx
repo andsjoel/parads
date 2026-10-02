@@ -16,6 +16,26 @@ import {
 import { subscribeFeedPosts } from "../services/volleyReportService";
 import { buildMockProfileBundle } from "../services/volleyListService";
 
+const immersiveCardMock = (() => {
+  const bundle = buildMockProfileBundle({
+    userId: "mock_immersive_card",
+    displayName: "Luna",
+    sex: "female",
+    isSetter: false,
+  }, 7);
+
+  bundle.user.profile.selectedDisplayCardId = "display-card-tunnel";
+  bundle.user.profile.statusMessage = "vivendo o jogo";
+  bundle.inventory.displayCards = ["display-card-tunnel"];
+
+  return bundle;
+})();
+
+const immersiveCardPerson = {
+  userId: immersiveCardMock.user.id,
+  displayName: immersiveCardMock.user.profile.displayName,
+};
+
 function formatDate(value) {
   if (!value) return "";
   const [year, month, day] = value.split("-");
@@ -26,7 +46,9 @@ export default function Feed() {
   const { isAdmin } = useAuth();
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [profilesById, setProfilesById] = useState({});
+  const [profilesById, setProfilesById] = useState({
+    [immersiveCardMock.user.id]: immersiveCardMock,
+  });
   const [selectedPerson, setSelectedPerson] = useState(null);
   const [loadingProfileId, setLoadingProfileId] = useState("");
   const [publicProfilesRevision, setPublicProfilesRevision] = useState(0);
@@ -115,6 +137,26 @@ export default function Feed() {
           </div>
         </div>
         <div className="space-y-4 px-5">
+          <article className="feed-report-card feed-report-card--wins p-4">
+            <header className="mb-4 flex items-center gap-3">
+              <div className="feed-report-icon flex h-10 w-10 items-center justify-center">
+                <Trophy size={19} />
+              </div>
+              <h2 className="min-w-0 flex-1 truncate text-lg font-black">
+                Carta exclusiva
+              </h2>
+            </header>
+
+            <PlayerMiniCard
+              person={{
+                id: immersiveCardPerson.userId,
+                name: immersiveCardPerson.displayName,
+              }}
+              profileBundle={immersiveCardMock}
+              onOpen={() => openProfile(immersiveCardPerson)}
+            />
+          </article>
+
           {loading && <div className="flex justify-center py-10"><OrbitLoader size={30} /></div>}
           {!loading && posts
             .filter((post) => post.type !== "games")

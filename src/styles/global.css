@@ -161,6 +161,106 @@
     linear-gradient(180deg, #3b1b21, #160409);
 }
 
+.display-card-preview--immersive {
+  background: #080204;
+}
+
+.profile-identity--immersive {
+  background: transparent;
+  backdrop-filter: none;
+}
+
+.profile-sticker-card--immersive {
+  border: 0;
+  background: #080204;
+  clip-path: none;
+}
+
+.immersive-profile-frame {
+  position: relative;
+  isolation: isolate;
+  padding: 2px;
+  background: linear-gradient(120deg, #d946ef, #ff354f 42%, #7428c7 76%, #ff6680);
+  clip-path: polygon(2% 3%, 96% 0, 100% 8%, 98% 91%, 93% 100%, 4% 97%, 0 88%, 1% 10%);
+  filter: drop-shadow(0 12px 24px rgba(0, 0, 0, 0.48));
+}
+
+.immersive-profile-frame > .profile-identity {
+  clip-path: polygon(2% 3%, 96% 0, 100% 8%, 98% 91%, 93% 100%, 4% 97%, 0 88%, 1% 10%);
+}
+
+.profile-stats.profile-stats--immersive {
+  background: transparent;
+  backdrop-filter: none;
+  padding-inline: 0;
+}
+
+.profile-stat-item--immersive::before,
+.profile-stat-item--immersive::after {
+  position: absolute;
+  content: "";
+  clip-path: var(--stat-shape);
+}
+
+.profile-stat-item--immersive::before {
+  z-index: -2;
+  inset: 0;
+  background: linear-gradient(145deg, rgba(224, 70, 239, 0.95), rgba(255, 53, 79, 0.82));
+}
+
+.immersive-coin-badge,
+.immersive-close-action {
+  position: relative;
+  isolation: isolate;
+  border: 0;
+  background: transparent;
+}
+
+.immersive-coin-badge::before,
+.immersive-coin-badge::after,
+.immersive-close-action::before,
+.immersive-close-action::after {
+  position: absolute;
+  content: "";
+  clip-path: polygon(5% 14%, 87% 0, 100% 19%, 94% 88%, 78% 100%, 2% 89%, 0 28%);
+}
+
+.immersive-coin-badge::before,
+.immersive-close-action::before {
+  z-index: -2;
+  inset: 0;
+  background: linear-gradient(135deg, #cf38dd, #ff3d59 60%, #6f27b8);
+}
+
+.immersive-coin-badge::after,
+.immersive-close-action::after {
+  z-index: -1;
+  inset: 1.5px;
+  background: rgba(17, 2, 10, 0.76);
+}
+
+.immersive-close-action {
+  transition: transform 180ms ease, filter 180ms ease;
+}
+
+.immersive-close-action:active {
+  transform: scale(0.92) rotate(2deg);
+}
+
+.shop-preview-actions--immersive {
+  border-color: rgba(219, 70, 239, 0.58);
+  background: rgba(16, 2, 11, 0.66);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.32);
+}
+
+.profile-stat-item--immersive::after {
+  z-index: -1;
+  inset: 1.5px;
+  background: rgba(20, 3, 8, 0.82);
+  backdrop-filter: blur(8px);
+}
+
 .display-card-preview-shine {
   position: absolute;
   inset: -30% auto -30% -65%;

@@ -5,6 +5,7 @@ import { Check, ChevronDown, Edit3, GalleryVerticalEnd, Image, Sparkles, UserRou
 import { updateUserProfile } from "../../services/profileService";
 import { purchaseProfileItem } from "../../services/profileStoreService";
 import coinIcon from "../../assets/achievements/coin.png";
+import ProfileBackgroundMedia from "./ProfileBackgroundMedia";
 
 import { profileBackgroundsCatalog } from "../../data/profileBackgroundsCatalog";
 import { profilePicsCatalog } from "../../data/profilePicsCatalog";
@@ -94,6 +95,7 @@ export default function ProfileHeader({
   readOnly = false,
   compact = false,
   onClose,
+  immersive = false,
 }) {
   const profile = user?.profile || {};
 
@@ -301,7 +303,7 @@ export default function ProfileHeader({
         className={
           isEditing
             ? "fixed inset-0 z-[80] flex items-center justify-center bg-black/65 px-5 py-5 backdrop-blur-sm"
-            : `profile-identity overflow-hidden transition-all duration-500 ${readOnly ? "rounded-[1.65rem] border border-white/10" : ""}`
+            : `profile-identity overflow-hidden transition-all duration-500 ${immersive ? "profile-identity--immersive" : ""} ${readOnly && !immersive ? "rounded-[1.65rem] border border-white/10" : ""}`
         }
         aria-modal={isEditing ? "true" : undefined}
         role={isEditing ? "dialog" : undefined}
@@ -309,18 +311,20 @@ export default function ProfileHeader({
         {!isEditing ? (
           <>
             <div className={`relative overflow-hidden ${compact ? "h-[clamp(190px,29dvh,224px)]" : "h-56"}`}>
-              <img
+              <ProfileBackgroundMedia
                 src={backgroundUrl}
-                alt=""
+                animate
                 className="h-full w-full object-cover"
               />
 
               <div className="absolute inset-0 bg-gradient-to-b from-black/5 via-[#210019]/20 to-[#210019]" />
 
-              <div className="profile-level-badge absolute left-5 top-5 flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white/85 backdrop-blur-xl">
-                <img src={coinIcon} alt="" className="h-5 w-5 object-contain" />
-                <span>{user?.progression?.coins ?? 0}</span>
-              </div>
+              {!immersive && (
+                <div className="profile-level-badge absolute left-5 top-5 flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white/85 backdrop-blur-xl">
+                  <img src={coinIcon} alt="" className="h-5 w-5 object-contain" />
+                  <span>{user?.progression?.coins ?? 0}</span>
+                </div>
+              )}
 
               {readOnly ? (
                 onClose && (
@@ -807,8 +811,22 @@ function AssetPickerModal({
                   >
                     {isDisplayCard ? (
                       <div className={`display-card-preview ${item.previewClassName} h-full w-full`}>
+                        {item.videoUrl && (
+                          <ProfileBackgroundMedia
+                            src={item.videoUrl}
+                            animate={false}
+                            className="absolute inset-0 h-full w-full object-cover"
+                          />
+                        )}
                         {item.hasShine && <span className="display-card-preview-shine" />}
                       </div>
+                    ) : isBackground ? (
+                      <ProfileBackgroundMedia
+                        src={item.src}
+                        alt={item.name}
+                        animate={false}
+                        className="h-full w-full object-cover"
+                      />
                     ) : (
                       <img
                         src={item.src}
@@ -864,8 +882,22 @@ function AssetPickerModal({
               <div className="profile-item-large-preview mb-4 h-64 overflow-hidden border border-white/10">
                 {isDisplayCard ? (
                   <div className={`display-card-preview ${previewItem.previewClassName} h-full w-full`}>
+                    {previewItem.videoUrl && (
+                      <ProfileBackgroundMedia
+                        src={previewItem.videoUrl}
+                        animate
+                        className="absolute inset-0 h-full w-full object-cover"
+                      />
+                    )}
                     {previewItem.hasShine && <span className="profile-sticker-shine absolute -inset-y-10 left-0 w-[78%]" />}
                   </div>
+                ) : isBackground ? (
+                  <ProfileBackgroundMedia
+                    src={previewItem.src}
+                    alt={previewItem.name}
+                    animate
+                    className="h-full w-full object-cover"
+                  />
                 ) : (
                   <img src={previewItem.src} alt={previewItem.name} className={`h-full w-full ${isBackground ? "object-cover" : "object-contain"}`} />
                 )}

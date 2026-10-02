@@ -7,6 +7,8 @@ import ProfileHeader from "./ProfileHeader";
 import ProfileStats from "./ProfileStats";
 import { getProfileAssetUrls } from "../../utils/profileAssets";
 import OrbitLoader from "../OrbitLoader";
+import ProfileBackgroundMedia from "./ProfileBackgroundMedia";
+import coinIcon from "../../assets/achievements/coin.png";
 import {
   DEFAULT_DISPLAY_CARD_ID,
   getDisplayCard,
@@ -31,9 +33,9 @@ export function PlayerMiniCard({ person, profileBundle, onOpen, onRemove }) {
   return (
     <div className="profile-player-mini-card group relative h-11 min-w-0 flex-1 overflow-visible bg-transparent transition">
       {backgroundUrl && (
-        <img
+        <ProfileBackgroundMedia
           src={backgroundUrl}
-          alt=""
+          animate={false}
           className="profile-player-mini-background absolute inset-0 h-full w-full rounded-2xl object-cover opacity-35"
         />
       )}
@@ -132,34 +134,58 @@ export function ProfileStickerModal({
   }, []);
 
   return createPortal(
-    <div className="fixed inset-0 z-[95] flex items-end justify-center bg-black/75 px-4 pb-4 pt-8 backdrop-blur-sm">
-      <article className={`profile-sticker-card profile-edit-modal ${displayCard.cardClassName} relative max-h-[92vh] w-full max-w-[430px] overflow-hidden p-3`}>
+    <div className={`fixed inset-0 z-[95] flex justify-center bg-black/90 ${displayCard.immersive ? "items-stretch p-0" : "items-end px-4 pb-4 pt-8 backdrop-blur-sm"}`}>
+      <article className={`profile-sticker-card ${displayCard.cardClassName} relative ${displayCard.immersive ? "h-[100dvh] w-full max-w-[430px] overflow-hidden" : "profile-edit-modal max-h-[92vh] w-full max-w-[430px] overflow-hidden p-3"}`}>
+        {displayCard.videoUrl && (
+          <ProfileBackgroundMedia
+            src={displayCard.videoUrl}
+            animate
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        )}
         {displayCard.hasShine && backgroundUrl && (
-          <img
+          <ProfileBackgroundMedia
             src={backgroundUrl}
-            alt=""
+            animate
             className="absolute inset-0 h-full w-full object-cover opacity-[0.3]"
           />
         )}
 
-        <div className={`absolute inset-0 ${displayCard.hasShine ? "bg-gradient-to-b from-[#18050a]/35 via-[#18050a]/72 to-[#18050a]/96" : "bg-gradient-to-b from-[#8f2e10]/25 via-[#5b170c]/72 to-[#2c0908]/96"}`} />
+        <div className={`absolute inset-0 ${displayCard.immersive ? "bg-gradient-to-b from-black/20 via-[#160309]/20 to-[#160309]/82" : displayCard.hasShine ? "bg-gradient-to-b from-[#18050a]/35 via-[#18050a]/72 to-[#18050a]/96" : "bg-gradient-to-b from-[#8f2e10]/25 via-[#5b170c]/72 to-[#2c0908]/96"}`} />
         {displayCard.hasShine && (
           <div className="profile-sticker-shine pointer-events-none absolute -inset-y-10 left-0 w-[78%]" />
         )}
         <div className="absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-[#ff713f]/75 to-transparent" />
+
+        {displayCard.immersive && (
+          <div className="absolute inset-x-4 top-[max(1rem,env(safe-area-inset-top))] z-20 flex items-center justify-between">
+            <div className="immersive-coin-badge flex h-10 items-center gap-2 px-3 text-sm font-black text-white backdrop-blur-xl">
+              <img src={coinIcon} alt="" className="h-5 w-5 object-contain" />
+              <span>{user?.progression?.coins ?? 0}</span>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="immersive-close-action flex h-10 w-10 items-center justify-center text-white backdrop-blur-xl"
+              aria-label="Fechar carta"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        )}
 
         {isLoading ? (
           <div className="relative flex h-[420px] flex-col items-center justify-center gap-3 text-app-primary">
             <OrbitLoader size={32} />
           </div>
         ) : user ? (
-          <div className="relative max-h-[calc(92vh-1.5rem)] overflow-y-auto pr-1">
-            <div className="overflow-hidden rounded-[1.9rem] border border-white/10 bg-white/[0.035] p-2 shadow-inner">
-              <ProfileHeader user={user} readOnly onClose={onClose} />
+          <div className={`relative overflow-y-auto ${displayCard.immersive ? "flex h-[100dvh] flex-col justify-end px-3 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))]" : "max-h-[calc(92vh-1.5rem)] pr-1"}`}>
+            <div className={displayCard.immersive ? "immersive-profile-frame overflow-hidden" : "overflow-hidden rounded-[1.9rem] border border-white/10 bg-white/[0.035] p-2 shadow-inner"}>
+              <ProfileHeader user={user} readOnly onClose={displayCard.immersive ? undefined : onClose} immersive={displayCard.immersive} />
             </div>
 
             <div className="mt-3">
-              <ProfileStats stats={profileBundle.stats} />
+              <ProfileStats stats={profileBundle.stats} immersive={displayCard.immersive} />
             </div>
 
           </div>

@@ -19,7 +19,7 @@ const statsConfig = [
   { key: "bestStreak", label: "Recorde", icon: Crown },
 ];
 
-export default function ProfileStats({ stats, missionsEnabled = false, isClaiming = false, onClaimRewards }) {
+export default function ProfileStats({ stats, missionsEnabled = false, isClaiming = false, onClaimRewards, immersive = false }) {
   const [selectedStat, setSelectedStat] = useState(null);
   const [showAllMissions, setShowAllMissions] = useState(false);
   const wrapperRef = useRef(null);
@@ -133,7 +133,7 @@ export default function ProfileStats({ stats, missionsEnabled = false, isClaimin
   }
 
   return (
-    <section ref={wrapperRef} className="profile-stats min-h-0 px-5 pb-1 pt-1">
+    <section ref={wrapperRef} className={`profile-stats min-h-0 px-5 pb-1 pt-1 ${immersive ? "profile-stats--immersive" : ""}`}>
       <div className="profile-stat-tabs relative z-[2] flex w-full gap-1 overflow-visible">
         {statsConfig.map((item) => {
           const Icon = item.icon;
@@ -146,7 +146,7 @@ export default function ProfileStats({ stats, missionsEnabled = false, isClaimin
               key={item.key}
               type="button"
               onClick={() => setSelectedStat((current) => current === item.key ? null : item.key)}
-              className={`profile-stat-item flex h-[62px] min-w-0 flex-col items-center justify-center px-2 py-1.5 text-center transition-all duration-300 active:scale-95 ${isSelected ? "profile-stat-item--selected profile-stat-item--connected flex-[1.9]" : "flex-1"}`}
+              className={`profile-stat-item flex h-[62px] min-w-0 flex-col items-center justify-center px-2 py-1.5 text-center transition-all duration-300 active:scale-95 ${immersive ? "profile-stat-item--immersive" : ""} ${isSelected ? "profile-stat-item--selected profile-stat-item--connected flex-[1.9]" : "flex-1"}`}
             >
               {hasReward && <span className="profile-mission-alert" aria-label="Recompensa disponível">!</span>}
               <Icon size={16} className={isSelected ? "text-[#ff713f]" : "text-white/45"} />

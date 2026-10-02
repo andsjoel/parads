@@ -33,14 +33,20 @@ async function generateThumbnail(directory, filename) {
 
 let generatedCount = 0;
 
-for (const relativeDirectory of assetDirectories) {
-  const directory = path.join(root, relativeDirectory);
-  const files = await readdir(directory);
-  const gifs = files.filter((filename) => filename.toLowerCase().endsWith(".gif"));
+async function generateDirectoryThumbnails(directory) {
+  const entries = await readdir(directory, { withFileTypes: true });
 
-  for (const filename of gifs) {
-    if (await generateThumbnail(directory, filename)) generatedCount += 1;
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      await generateDirectoryThumbnails(path.join(directory, entry.name));
+    } else if (entry.name.toLowerCase().endsWith(".gif")) {
+      if (await generateThumbnail(directory, entry.name)) generatedCount += 1;
+    }
   }
+}
+
+for (const relativeDirectory of assetDirectories) {
+  await generateDirectoryThumbnails(path.join(root, relativeDirectory));
 }
 
 console.log(

@@ -7,11 +7,13 @@ import coinIcon from "../assets/achievements/coin.png";
 import OrbitLoader from "../components/OrbitLoader";
 import ProfileHeader from "../components/profile/ProfileHeader";
 import ProfileStats from "../components/profile/ProfileStats";
+import ProfileBackgroundMedia from "../components/profile/ProfileBackgroundMedia";
 import { useAuth } from "../contexts/AuthContext";
 import { profileBackgroundsCatalog } from "../data/profileBackgroundsCatalog";
 import { profilePicsCatalog } from "../data/profilePicsCatalog";
 import { profilePicBordersCatalog } from "../data/profilePicBordersCatalog";
 import { displayCardsCatalog } from "../data/displayCardsCatalog";
+import { getItemRarity } from "../data/economy";
 import { purchaseProfileItem } from "../services/profileStoreService";
 import { getCatalogAssetList, getProfileAssetUrls, profileAssetFiles } from "../utils/profileAssets";
 
@@ -148,14 +150,24 @@ export default function Shop() {
             <button key={item.id} type="button" onClick={() => setPreviewItem(item)} className="shop-item text-left active:scale-[0.98]">
               <div className="relative h-36 overflow-hidden">
                 {categoryId === "displayCard" ? (
-                  <div className={`display-card-preview ${item.previewClassName} h-full w-full`}>{item.hasShine && <span className="display-card-preview-shine" />}</div>
+                  <div className={`display-card-preview ${item.previewClassName} h-full w-full`}>
+                    {item.videoUrl && <ProfileBackgroundMedia src={item.videoUrl} animate={false} className="absolute inset-0 h-full w-full object-cover" />}
+                    {item.hasShine && <span className="display-card-preview-shine" />}
+                  </div>
                 ) : (
-                  <img src={item.src} alt={item.name} className={`h-full w-full ${categoryId === "background" ? "object-cover" : "object-contain"}`} />
+                  categoryId === "background" ? (
+                    <ProfileBackgroundMedia src={item.src} alt={item.name} animate={false} className="h-full w-full object-cover" />
+                  ) : (
+                    <img src={item.src} alt={item.name} className="h-full w-full object-contain" />
+                  )
                 )}
                 {isOwned(item) && <span className="shop-owned absolute right-2 top-2"><Check size={13} strokeWidth={3} /></span>}
               </div>
               <div className="flex items-center justify-between gap-2 p-3">
-                <span className="truncate text-sm font-black">{item.name}</span>
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-black">{item.name}</span>
+                  <RarityLabel rarity={item.rarity} />
+                </span>
                 <span className="flex shrink-0 items-center gap-1 text-xs font-black text-[#ffb071]"><img src={coinIcon} alt="" className="h-4 w-4" />{item.price?.amount ?? 0}</span>
               </div>
             </button>
@@ -192,17 +204,27 @@ export default function Shop() {
 }
 
 function ShopPreview({ item, type, user, stats, owned, onClose, onBuy }) {
+  const isImmersive = type === "displayCard" && item.immersive;
   const simulatedUser = type === "displayCard"
     ? { ...user, profile: { ...user.profile, selectedDisplayCardId: item.id } }
     : user;
   const { backgroundUrl } = getProfileAssetUrls(simulatedUser.profile);
 
   return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/75 px-4 py-5 backdrop-blur-sm">
-      <div className="flex max-h-[calc(100vh-2.5rem)] w-full max-w-[440px] flex-col">
-        <div className="shop-preview-actions mb-2 h-[132px] shrink-0 px-4 pb-4 pt-5">
+    <div className={`fixed inset-0 z-[90] flex items-center justify-center overflow-hidden ${isImmersive ? "bg-black px-4 py-5" : "bg-black/75 px-4 py-5 backdrop-blur-sm"}`}>
+      {isImmersive && (
+        <>
+          <ProfileBackgroundMedia src={item.videoUrl} animate className="absolute inset-0 h-full w-full object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-b from-[#17051f]/45 via-[#250315]/30 to-[#090107]/90" />
+        </>
+      )}
+      <div className="relative flex max-h-[calc(100dvh-2.5rem)] w-full max-w-[440px] flex-col">
+        <div className={`shop-preview-actions mb-2 h-[132px] shrink-0 px-4 pb-4 pt-5 ${isImmersive ? "shop-preview-actions--immersive" : ""}`}>
           <div className="flex items-start justify-between gap-3">
-            <h2 className="min-w-0 break-words font-idv-title text-2xl leading-none">{item.name}</h2>
+            <div className="min-w-0">
+              <h2 className="break-words font-idv-title text-2xl leading-none">{item.name}</h2>
+              <RarityLabel rarity={item.rarity} />
+            </div>
             <button type="button" onClick={onClose} className="profile-modal-close flex h-10 w-10 shrink-0 items-center justify-center" aria-label="Fechar"><X size={17} /></button>
           </div>
 
@@ -222,21 +244,36 @@ function ShopPreview({ item, type, user, stats, owned, onClose, onBuy }) {
 
         <div className="min-h-0 flex-1 overflow-hidden">
           {type === "displayCard" ? (
-            <article className={`profile-sticker-card profile-edit-modal ${item.cardClassName} relative overflow-hidden p-3`}>
+            <article className={`profile-sticker-card ${item.immersive ? "relative h-full min-h-0 overflow-hidden bg-transparent" : `profile-edit-modal ${item.cardClassName} relative overflow-hidden p-3`}`}>
+              {item.videoUrl && !item.immersive && <ProfileBackgroundMedia src={item.videoUrl} animate className="absolute inset-0 h-full w-full object-cover" />}
               {item.hasShine && backgroundUrl && (
-                <img src={backgroundUrl} alt="" className="absolute inset-0 h-full w-full object-cover opacity-[0.3]" />
+                <ProfileBackgroundMedia src={backgroundUrl} animate className="absolute inset-0 h-full w-full object-cover opacity-[0.3]" />
               )}
-              <div className={`absolute inset-0 ${item.hasShine ? "bg-gradient-to-b from-[#18050a]/35 via-[#18050a]/72 to-[#18050a]/96" : "bg-gradient-to-b from-[#8f2e10]/25 via-[#5b170c]/72 to-[#2c0908]/96"}`} />
+              {!item.immersive && <div className={`absolute inset-0 ${item.hasShine ? "bg-gradient-to-b from-[#18050a]/35 via-[#18050a]/72 to-[#18050a]/96" : "bg-gradient-to-b from-[#8f2e10]/25 via-[#5b170c]/72 to-[#2c0908]/96"}`} />}
               {item.hasShine && <div className="profile-sticker-shine pointer-events-none absolute -inset-y-10 left-0 w-[78%]" />}
-              <div className="relative overflow-hidden rounded-[1.9rem] border border-white/10 bg-white/[0.035] p-2"><ProfileHeader user={simulatedUser} readOnly /></div>
-              <div className="relative mt-3"><ProfileStats stats={stats} /></div>
+              <div className={item.immersive ? "relative flex h-full flex-col justify-end p-3" : "relative"}>
+                <div className={item.immersive ? "immersive-profile-frame overflow-hidden" : "overflow-hidden rounded-[1.9rem] border border-white/10 bg-white/[0.035] p-2"}><ProfileHeader user={simulatedUser} readOnly immersive={item.immersive} /></div>
+                <div className="relative mt-3"><ProfileStats stats={stats} immersive={item.immersive} /></div>
+              </div>
             </article>
           ) : (
-            <div className="profile-edit-modal p-4"><div className="profile-item-large-preview h-[55vh] overflow-hidden"><img src={item.src} alt={item.name} className={`h-full w-full ${type === "background" ? "object-cover" : "object-contain"}`} /></div></div>
+            <div className="profile-edit-modal p-4"><div className="profile-item-large-preview h-[55vh] overflow-hidden">{type === "background" ? <ProfileBackgroundMedia src={item.src} alt={item.name} animate className="h-full w-full object-cover" /> : <img src={item.src} alt={item.name} className="h-full w-full object-contain" />}</div></div>
           )}
         </div>
       </div>
     </div>
+  );
+}
+
+function RarityLabel({ rarity }) {
+  const definition = getItemRarity(rarity);
+  return (
+    <span
+      className="mt-1 block text-[9px] font-black uppercase"
+      style={{ color: definition.color }}
+    >
+      {definition.label}
+    </span>
   );
 }
 

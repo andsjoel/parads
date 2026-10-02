@@ -1,5 +1,5 @@
 const backgroundImages = import.meta.glob(
-  "../assets/profile-backgrounds/*.{png,jpg,jpeg,webp}",
+  "../assets/profile-backgrounds/**/*.{png,jpg,jpeg,webp,webm,mp4}",
   {
     eager: true,
     import: "default",
@@ -7,7 +7,7 @@ const backgroundImages = import.meta.glob(
 );
 
 const profilePicImages = import.meta.glob(
-  "../assets/profile-pics/*.{png,jpg,jpeg,webp,gif}",
+  "../assets/profile-pics/**/*.{png,jpg,jpeg,webp,gif}",
   {
     eager: true,
     import: "default",
@@ -15,7 +15,7 @@ const profilePicImages = import.meta.glob(
 );
 
 const profilePicBorderImages = import.meta.glob(
-  "../assets/profile-pic-borders/*.{png,jpg,jpeg,webp,gif,svg}",
+  "../assets/profile-pic-borders/**/*.{png,jpg,jpeg,webp,gif,svg}",
   {
     eager: true,
     import: "default",
@@ -38,6 +38,10 @@ export function getAssetById(files, id, fallbackId) {
   return fallback?.[1] || "";
 }
 
+export function isVideoAsset(src = "") {
+  return /\.(webm|mp4)(?:$|[?#])/i.test(src);
+}
+
 function getStaticAssetById(files, id, fallbackId) {
   const targetId = id || fallbackId;
   const thumbnail = Object.entries(files).find(([path]) =>
@@ -51,6 +55,9 @@ export function getCatalogAssetList(files, catalog) {
   return catalog.map((item) => ({
     ...item,
     src: getAssetById(files, item.imageId, item.imageId),
+    mediaType: isVideoAsset(getAssetById(files, item.imageId, item.imageId))
+      ? "video"
+      : "image",
   }));
 }
 
@@ -80,6 +87,7 @@ export function getProfileAssetUrls(profile = {}, options = {}) {
 
   return {
     backgroundUrl,
+    backgroundType: isVideoAsset(backgroundUrl) ? "video" : "image",
     profilePicUrl,
     profilePicBorderUrl,
   };

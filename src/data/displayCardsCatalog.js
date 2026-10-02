@@ -1,4 +1,5 @@
-import { coinPrice } from "./economy";
+import { catalogRarity } from "./economy";
+import tunnelCardVideo from "../assets/profile-card/card-tunel.webm";
 
 export const DEFAULT_DISPLAY_CARD_ID = "display-card-orange";
 
@@ -18,11 +19,23 @@ export const displayCardsCatalog = [
     description: "Carta especial com acabamento translúcido e efeito de brilho.",
     category: "display-card",
     theme: "special",
-    rarity: "rare",
-    price: coinPrice(5),
+    ...catalogRarity("epic"),
     cardClassName: "profile-sticker-card--shiny",
     previewClassName: "display-card-preview--shiny",
     hasShine: true,
+  },
+  {
+    id: "display-card-tunnel",
+    name: "Carta Túnel",
+    description: "Carta imersiva com vídeo ocupando toda a tela.",
+    category: "display-card",
+    theme: "special",
+    ...catalogRarity("exclusive"),
+    cardClassName: "profile-sticker-card--immersive",
+    previewClassName: "display-card-preview--immersive",
+    videoUrl: tunnelCardVideo,
+    immersive: true,
+    hasShine: false,
   },
 ];
 
