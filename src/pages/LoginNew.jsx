@@ -1,6 +1,6 @@
 /* eslint-disable react/prop-types */
 import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { ArrowRight } from "lucide-react";
 
@@ -119,6 +119,7 @@ function AnimatedUsername({ value, onChange, disabled }) {
 }
 
 export default function LoginNew() {
+  const location = useLocation();
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
   const [isValidating, setIsValidating] = useState(false);
@@ -187,6 +188,7 @@ export default function LoginNew() {
   return (
     <main className="login-page" style={{ backgroundImage: `url(${loginBackground})` }}>
       <form className="login-box" onSubmit={handleSubmit}>
+        {location.state?.passwordChanged && <p role="status" className="mb-5 text-center text-sm text-[#b8efc3]">Senha atualizada. Entre com sua nova senha.</p>}
         <AnimatedUsername
           value={login}
           onChange={(value) => {

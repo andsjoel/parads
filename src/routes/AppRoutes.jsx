@@ -15,12 +15,14 @@ import Shop from "../pages/Shop";
 import AdminVolleyList from "../pages/AdminVolleyList";
 import AdminReports from "../pages/AdminReports";
 import Cards from "../pages/Cards";
+import ChangePassword from "../pages/ChangePassword";
 
 export default function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<FirstAccess />} />
+      <Route path="/change-password" element={<ChangePassword />} />
 
       <Route
         path="/"

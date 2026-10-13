@@ -509,20 +509,16 @@ export default function MatchList({ mode = "matches" }) {
               </h1>
             </div>
 
-            <div className="flex shrink-0 items-center gap-2">
-              {isAdmin && (
+            {isAdmin && (
                 <Link
                   to={isPresenceMode ? "/admin/volley-list" : "/admin/matches"}
-                  className="flex h-10 w-10 items-center justify-center rounded-2xl border border-app-primary/20 bg-app-primary/10 text-app-primary transition active:scale-95"
+                  aria-label={isPresenceMode ? "Gestão da lista" : "Gestão das partidas"}
+                  className="flex h-10 shrink-0 items-center justify-center gap-2 rounded-md border border-app-primary/20 bg-app-primary/10 px-3 text-app-primary transition active:scale-95"
                 >
                   <Star size={18} />
+                  <span className="text-xs font-black">ADM</span>
                 </Link>
-              )}
-
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-app-primary/15 text-app-primary">
-                <Volleyball size={20} />
-              </div>
-            </div>
+            )}
           </div>
 
         </header>

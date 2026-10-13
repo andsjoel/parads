@@ -3,7 +3,17 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() {
-      return request.auth != null;
+      return request.auth != null && (
+        !exists(/databases/$(database)/documents/account_security/$(request.auth.uid))
+        || (
+          get(/databases/$(database)/documents/account_security/$(request.auth.uid)).data.get('passwordChangeRequired', false) != true
+          && request.auth.token.auth_time > get(/databases/$(database)/documents/account_security/$(request.auth.uid)).data.get('invalidBefore', 0)
+        )
+      );
+    }
+
+    function ownsAccount(userId) {
+      return request.auth != null && request.auth.uid == userId;
     }
 
     function isSelf(userId) {
@@ -37,10 +47,30 @@ service cloud.firestore {
 }
 
     match /users/{userId} {
-      allow read: if isSelf(userId) || isAdmin();
-      allow create: if isSelf(userId) || isAdmin();
-      allow update: if isSelf(userId) || isAdmin();
+      allow read: if ownsAccount(userId) || isAdmin();
+      allow create: if isAdmin() || (
+        isSelf(userId)
+        && get(/databases/$(database)/documents/pre_registered_users/$(request.resource.data.phone)).data.enabled == true
+        && get(/databases/$(database)/documents/pre_registered_users/$(request.resource.data.phone)).data.claimed != true
+        && request.resource.data.role == get(/databases/$(database)/documents/pre_registered_users/$(request.resource.data.phone)).data.role
+        && request.resource.data.type == request.resource.data.role
+        && getAfter(/databases/$(database)/documents/pre_registered_users/$(request.resource.data.phone)).data.userId == userId
+        && getAfter(/databases/$(database)/documents/pre_registered_users/$(request.resource.data.phone)).data.claimed == true
+      );
+      allow update: if isAdmin() || (
+        isSelf(userId)
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'type'])
+      );
       allow delete: if isAdmin();
+    }
+
+    match /account_security/{userId} {
+      allow read: if ownsAccount(userId) || isAdmin();
+      allow write: if false;
+    }
+
+    match /password_reset_audit/{resetId} {
+      allow read, write: if false;
     }
 
     match /invite_access_codes/{inviteId} {

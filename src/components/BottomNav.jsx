@@ -26,7 +26,7 @@ export default function BottomNav() {
 
   return (
     <div className="pointer-events-none fixed bottom-0 left-0 right-0 z-50 flex justify-center">
-      <nav className="app-bottom-nav pointer-events-auto relative z-10 flex w-full items-center justify-center gap-2 px-3 pb-[calc(10px+env(safe-area-inset-bottom))] pt-3 shadow-[0_-10px_35px_rgba(0,0,0,0.25)] backdrop-blur-[22px] transition-all duration-300">
+      <nav className="app-bottom-nav pointer-events-auto relative z-10 flex w-full items-center justify-center gap-2 px-3 pb-[calc(10px+env(safe-area-inset-bottom))] pt-3 transition-all duration-300">
         {navItems.map(({ to, icon: Icon, label }) => (
           <NavLink key={to} to={to} onClick={() => handleNavigation(false)} aria-label={label} className={({ isActive }) => `app-nav-item flex h-11 w-11 items-center justify-center transition-all duration-300 active:scale-95 ${isActive ? "app-nav-item--active" : "text-stone-300 hover:bg-white/[0.07] hover:text-white"}`}>
             <Icon size={19} />
@@ -37,7 +37,7 @@ export default function BottomNav() {
           <ChevronRight size={18} className={`transition-transform duration-300 ${isExpanded ? "rotate-180" : ""}`} />
         </button>
 
-        <div className={`flex overflow-hidden transition-all duration-300 ${isExpanded ? "w-[92px] opacity-100" : "w-0 opacity-0"}`}>
+        <div className={`flex transition-all duration-300 ${isExpanded ? "w-[92px] overflow-visible opacity-100" : "w-0 overflow-hidden opacity-0"}`}>
           <NavLink to="/shop" onClick={() => handleNavigation(true)} className={({ isActive }) => `app-nav-item flex h-11 w-11 shrink-0 items-center justify-center transition-all duration-300 active:scale-95 ${isActive ? "app-nav-item--active" : "text-stone-300 hover:bg-white/[0.07] hover:text-white"}`} aria-label="Loja">
             <Store size={18} strokeWidth={2.3} />
           </NavLink>

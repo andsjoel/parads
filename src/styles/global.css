@@ -1102,7 +1102,7 @@
     linear-gradient(112deg, rgba(255, 106, 51, 0.08), transparent 34%),
     linear-gradient(180deg, rgba(38, 7, 14, 0.96), rgba(19, 3, 8, 0.98));
   clip-path: polygon(0 7px, 17% 7px, 20% 5px, 44% 6px, 49% 3px, 74% 6px, 79% 4px, 100% 7px, 100% 100%, 0 100%);
-  box-shadow: 0 -14px 34px rgba(0, 0, 0, 0.38);
+  backdrop-filter: blur(22px);
   pointer-events: none;
 }
 
@@ -1112,10 +1112,16 @@
 }
 
 .app-nav-item--active {
+  z-index: 2;
   background: linear-gradient(135deg, #ff3d2e, #ff8a2e);
   color: #1a0504;
   box-shadow: 0 7px 22px rgba(255, 80, 42, 0.38);
-  transform: translateY(-5px) scale(1.1);
+  transform: translateY(-13px) scale(1.22);
+}
+
+.app-nav-item--active > svg {
+  width: 22px;
+  height: 22px;
 }
 
 .login-error-enter {
@@ -2879,15 +2885,28 @@
   font-weight: 700;
 }
 
+.feed-guide-bubble::before,
 .feed-guide-bubble::after {
   position: absolute;
-  left: -8px;
-  bottom: -1px;
-  width: 9px;
-  height: 13px;
   content: "";
-  background: #371011;
+  pointer-events: none;
   clip-path: polygon(100% 0, 100% 100%, 0 100%);
+}
+
+.feed-guide-bubble::before {
+  left: -10px;
+  bottom: -1px;
+  width: 10px;
+  height: 15px;
+  background: rgba(255, 130, 75, 0.38);
+}
+
+.feed-guide-bubble::after {
+  left: -8px;
+  bottom: 0;
+  width: 9px;
+  height: 12px;
+  background: #370e11;
 }
 
 .feed-guide-typing {

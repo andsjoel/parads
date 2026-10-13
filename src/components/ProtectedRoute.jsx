@@ -4,7 +4,7 @@ import { useAuth } from "../contexts/AuthContext";
 import generalBackground from "../assets/app-backgrounds/bg-geral.png";
 
 export default function ProtectedRoute({ children }) {
-  const { loadingAuth, isAuthenticated } = useAuth();
+  const { loadingAuth, isAuthenticated, mustChangePassword } = useAuth();
 
   if (loadingAuth) {
     return (
@@ -22,6 +22,8 @@ export default function ProtectedRoute({ children }) {
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
+
+  if (mustChangePassword) return <Navigate to="/change-password" replace />;
 
   return children;
 }

@@ -10,21 +10,30 @@ export function preloadUserSession(uid) {
   if (cachedSession?.uid === uid) return Promise.resolve(cachedSession);
   if (pendingSession?.uid === uid) return pendingSession.promise;
 
-  const promise = Promise.all([
-    getDoc(doc(db, "users", uid)),
-    getDoc(doc(db, "user_stats", uid)),
-    getDoc(doc(db, "user_inventory", uid)),
-    getDoc(doc(db, "user_showcase", uid)),
-  ]).then(([userSnap, statsSnap, inventorySnap, showcaseSnap]) => {
+  const promise = getDoc(doc(db, "account_security", uid)).then(async (securitySnap) => {
+    const security = securitySnap.exists() ? securitySnap.data() : null;
+    if (security?.passwordChangeRequired) {
+      const userSnap = await getDoc(doc(db, "users", uid));
+      if (!userSnap.exists()) return null;
+      return { uid, user: { id: userSnap.id, ...userSnap.data() }, security, stats: null, inventory: null, showcase: null };
+    }
+    const [userSnap, statsSnap, inventorySnap, showcaseSnap] = await Promise.all([
+      getDoc(doc(db, "users", uid)),
+      getDoc(doc(db, "user_stats", uid)),
+      getDoc(doc(db, "user_inventory", uid)),
+      getDoc(doc(db, "user_showcase", uid)),
+    ]);
     if (!userSnap.exists()) return null;
-
-    cachedSession = {
+    return {
       uid,
+      security,
       user: { id: userSnap.id, ...userSnap.data() },
       stats: statsSnap.exists() ? statsSnap.data() : null,
       inventory: inventorySnap.exists() ? inventorySnap.data() : null,
       showcase: showcaseSnap.exists() ? showcaseSnap.data() : null,
     };
+  }).then((session) => {
+    cachedSession = session;
     pendingSession = null;
     return cachedSession;
   }).catch((error) => {

@@ -84,6 +84,8 @@ export function AuthProvider({ children }) {
         setUserData(session.user);
         setSessionData(session);
 
+        if (session.security?.passwordChangeRequired) return;
+
         syncOwnPublicProfile(session.user).catch((error) => {
           console.warn("Nao foi possivel sincronizar o perfil publico:", error);
         });
@@ -111,6 +113,25 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     if (!userAuth?.uid) return undefined;
+    return onSnapshot(doc(db, "account_security", userAuth.uid), async (snapshot) => {
+      try {
+        if (auth.currentUser !== userAuth) return;
+        const security = snapshot.exists() ? snapshot.data() : null;
+        setSessionData((current) => current ? { ...current, security } : current);
+        if (security?.invalidBefore) {
+          const token = await userAuth.getIdTokenResult();
+          if (auth.currentUser === userAuth && token.claims.auth_time <= security.invalidBefore) {
+            await signOut(auth);
+          }
+        }
+      } catch (error) {
+        console.warn("Falha ao verificar a sessao da conta:", error);
+      }
+    }, (error) => console.warn("Não foi possível acompanhar a segurança da conta:", error));
+  }, [userAuth]);
+
+  useEffect(() => {
+    if (!userAuth?.uid || sessionData?.security?.passwordChangeRequired) return undefined;
 
     return onSnapshot(
       doc(db, "user_stats", userAuth.uid),
@@ -124,7 +145,7 @@ export function AuthProvider({ children }) {
         console.warn("Nao foi possivel acompanhar as estatisticas:", error);
       },
     );
-  }, [userAuth?.uid]);
+  }, [userAuth?.uid, sessionData?.security?.passwordChangeRequired]);
 
   const value = useMemo(() => {
     const accountType = userData?.type || userData?.role || "member";
@@ -140,6 +161,7 @@ export function AuthProvider({ children }) {
       loadingAuth,
 
       isAuthenticated: !!userAuth && !!userData,
+      mustChangePassword: Boolean(sessionData?.security?.passwordChangeRequired),
 
       accountType,
       role,

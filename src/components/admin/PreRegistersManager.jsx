@@ -6,6 +6,7 @@ import {
   ChevronDown,
   Copy,
   Mars,
+  KeyRound,
   Pencil,
   Plus,
   Search,
@@ -28,6 +29,7 @@ import InviteCreateModal from "./InviteCreateModal";
 import generalBackground from "../../assets/app-backgrounds/bg-geral.png";
 
 import { deleteUserCascadeByPreRegister } from "../../services/userService";
+import { resetAccountPassword } from "../../services/passwordRecoveryService";
 
 function onlyNumbers(value) {
   return value.replace(/\D/g, "");
@@ -152,6 +154,10 @@ export default function PreRegistersManager() {
   const [editTarget, setEditTarget] = useState(null);
   const [listError, setListError] = useState("");
   const [regeneratingId, setRegeneratingId] = useState("");
+  const [passwordResetTarget, setPasswordResetTarget] = useState(null);
+  const [passwordResetResult, setPasswordResetResult] = useState(null);
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
+  const [passwordResetError, setPasswordResetError] = useState("");
 
   const countedTypeOptions = useMemo(() => typeFilterOptions.map((option) => ({
     ...option,
@@ -293,6 +299,21 @@ export default function PreRegistersManager() {
     }
   }
 
+  async function handleResetPassword() {
+    if (!passwordResetTarget || isResettingPassword) return;
+    setIsResettingPassword(true);
+    setPasswordResetError("");
+    try {
+      const result = await resetAccountPassword(passwordResetTarget.id);
+      setPasswordResetResult(result);
+      setPasswordResetTarget(null);
+    } catch (resetError) {
+      setPasswordResetError(resetError.message);
+    } finally {
+      setIsResettingPassword(false);
+    }
+  }
+
   if (loadingAuth) return <div className="flex min-h-screen items-center justify-center"><OrbitLoader /></div>;
   if (!isAdmin) return <Navigate to="/menu" replace />;
 
@@ -429,6 +450,9 @@ export default function PreRegistersManager() {
                       <Pencil size={16} /> editar
                     </button>
                     </div>
+                    {item.claimed && item.userId && (
+                      <button type="button" onClick={() => { setPasswordResetError(""); setPasswordResetTarget(item); }} className="register-outline-action mx-4 mb-4 flex h-10 w-[calc(100%_-_2rem)] items-center justify-center gap-2 text-xs"><KeyRound size={16} /> redefinir senha</button>
+                    )}
                   </div>
                 </div>
               );
@@ -576,6 +600,37 @@ export default function PreRegistersManager() {
             >
               Fechar
             </button>
+          </div>
+        </div>
+      )}
+
+      {passwordResetTarget && (
+        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/75 px-5 py-5 backdrop-blur-sm">
+          <div className="profile-edit-modal w-full max-w-[420px] p-5">
+            <header className="flex items-start justify-between gap-3">
+              <h2 className="font-idv-title text-2xl">Redefinir senha?</h2>
+              <button type="button" disabled={isResettingPassword} onClick={() => setPasswordResetTarget(null)} className="profile-modal-close flex h-9 w-9 shrink-0 items-center justify-center" aria-label="Fechar"><X size={17} /></button>
+            </header>
+            <p className="mt-4 text-sm leading-relaxed text-white/55">A senha atual de {passwordResetTarget.fullName} deixará de funcionar. A pessoa receberá uma senha temporária e precisará escolher uma nova ao entrar.</p>
+            {passwordResetError && <p role="alert" className="mt-4 text-sm text-red-300">{passwordResetError}</p>}
+            <div className="mt-5 grid grid-cols-2 gap-2">
+              <button type="button" disabled={isResettingPassword} onClick={() => setPasswordResetTarget(null)} className="register-outline-action h-11 text-sm">cancelar</button>
+              <button type="button" disabled={isResettingPassword} onClick={handleResetPassword} className="admin-primary-action flex h-11 items-center justify-center gap-2 text-sm disabled:opacity-45"><KeyRound size={16} />{isResettingPassword ? "Redefinindo..." : "Redefinir"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {passwordResetResult && (
+        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/75 px-5 py-5 backdrop-blur-sm">
+          <div className="profile-edit-modal w-full max-w-[420px] p-5 text-center">
+            <header className="flex items-center justify-between gap-3">
+              <h2 className="font-idv-title text-2xl">Senha temporária</h2>
+              <button type="button" onClick={() => setPasswordResetResult(null)} className="profile-modal-close flex h-9 w-9 shrink-0 items-center justify-center" aria-label="Fechar"><X size={17} /></button>
+            </header>
+            <p className="mt-5 font-mono text-3xl text-[#ff8a4c]">{passwordResetResult.temporaryPassword}</p>
+            <p className="mt-3 text-sm leading-relaxed text-white/55">Envie no privado para {passwordResetResult.fullName}. Esta senha não será exibida novamente.</p>
+            <button type="button" onClick={() => handleCopyAccessCode(passwordResetResult.temporaryPassword, "password-reset")} className="admin-primary-action mt-5 flex h-12 w-full items-center justify-center gap-2 text-sm">{codeCopied === "password-reset" ? <Check size={17} /> : <Copy size={17} />}{codeCopied === "password-reset" ? "Senha copiada" : "Copiar senha"}</button>
           </div>
         </div>
       )}
