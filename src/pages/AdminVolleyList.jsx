@@ -20,12 +20,12 @@ import {
 } from "lucide-react";
 
 import OrbitLoader from "../components/OrbitLoader";
+import InviteCreateModal from "../components/admin/InviteCreateModal";
 import CourtTeamsFrame from "../components/matches/CourtTeamsFrame";
 import { useAuth } from "../contexts/AuthContext";
 import generalBackground from "../assets/app-backgrounds/bg-geral.png";
 import { buildTeamDisplaySlots } from "../utils/teamSlots";
 import {
-  addGhostPlayer,
   addVolleyMatchPlayer,
   adminAddVolleyListParticipant,
   adminRemoveVolleyListParticipant,
@@ -37,7 +37,6 @@ import {
   recordTeamWin,
   redoVolleyListAction,
   removeMatchPlayer,
-  seedMockVolleyPlayers,
   startVolleyMatch,
   subscribeActiveVolleyList,
   swapMatchPlayers,
@@ -129,7 +128,7 @@ function PlayerPill({ player, placeholderLabel = "Vaga", placeholderType = "defa
       className={`admin-volley-player ${identityClass} ${selected ? "admin-volley-player--selected" : ""} group flex min-h-11 w-full flex-1 items-center border px-3 py-2 text-left transition active:scale-[0.98] ${selected ? "border-app-primary bg-app-primary/15" : "border-white/10 bg-white/[0.045]"}`}
     >
       <p className="min-w-0 truncate text-sm font-black text-[#fffaf0]">{player.displayName}</p>
-      {player.kind === "ghost" && (
+      {(player.kind === "guest" || player.kind === "ghost") && (
         <span className="admin-guest-mark ml-2 shrink-0" title="Convidado" aria-label="Convidado">C</span>
       )}
       <span className="flex-1" />
@@ -389,6 +388,7 @@ export default function AdminVolleyList({ mode = "list" }) {
   const [swapMatchPair, setSwapMatchPair] = useState(null);
   const [vacancySwapTarget, setVacancySwapTarget] = useState(null);
   const [winConfirmationIndex, setWinConfirmationIndex] = useState(null);
+  const [guestInviteName, setGuestInviteName] = useState(null);
 
   useEffect(() => {
     setIsLoading(true);
@@ -613,22 +613,9 @@ export default function AdminVolleyList({ mode = "list" }) {
     });
   }
 
-  async function handleAddGuest() {
+  function handleAddGuest() {
     if (!list || !search.trim()) return;
-
-    let addedPlayer = null;
-    const added = await runAdminAction("guest", async () => {
-      addedPlayer = await addGhostPlayer({
-        listId: list.id,
-        displayName: search,
-      });
-    });
-
-    if (added && addedPlayer) {
-      setSearch("");
-      setSelectedMatchPlayerId(addedPlayer.entryId);
-      setPlayerActionTargetId(addedPlayer.entryId);
-    }
+    setGuestInviteName(search.trim());
   }
 
   function handleSelectPlayer(player, openEditor = false) {
@@ -883,24 +870,6 @@ export default function AdminVolleyList({ mode = "list" }) {
                   >
                     <UserRoundPlus size={16} />
                     adicionar
-                  </button>
-                )}
-
-                {isListManagement && isOpen && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      runAdminAction("seed-mock", () =>
-                        seedMockVolleyPlayers({ listId: list.id }),
-                      )
-                    }
-                    disabled={busyAction === "seed-mock"}
-                    className="flex h-11 w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-app-primary/35 bg-app-primary/10 text-sm font-black text-app-primary active:scale-[0.98] disabled:opacity-50"
-                  >
-                    <Users size={16} />
-                    {busyAction === "seed-mock"
-                      ? "Gerando teste..."
-                      : "Popular teste: 30 jogadores"}
                   </button>
                 )}
 
@@ -1413,6 +1382,30 @@ export default function AdminVolleyList({ mode = "list" }) {
         );
       })()}
 
+      {guestInviteName !== null && (
+        <InviteCreateModal
+          initialName={guestInviteName}
+          initialRole="guest"
+          guestOnly
+          onClose={() => setGuestInviteName(null)}
+          onCreated={async (invite) => {
+            if (!invite.user) {
+              setGuestInviteName(null);
+              setErrorMessage("Convite criado. O usuário poderá ser adicionado após o primeiro acesso.");
+              return;
+            }
+            const addedPlayer = await addVolleyMatchPlayer({
+              listId: list.id, userData: invite.user,
+              overrides: { sex: invite.user.sex || "male" },
+            });
+            setUsers((current) => [...current.filter((user) => user.id !== invite.user.id), invite.user]);
+            setGuestInviteName(null);
+            setSearch("");
+            setSelectedMatchPlayerId(addedPlayer.entryId);
+            setPlayerActionTargetId(addedPlayer.entryId);
+          }}
+        />
+      )}
     </main>
   );
 }

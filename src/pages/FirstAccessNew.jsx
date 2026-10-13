@@ -5,6 +5,8 @@ import {
   createUserWithEmailAndPassword,
   deleteUser,
   signOut,
+  signInWithEmailAndPassword,
+  updatePassword,
 } from "firebase/auth";
 import { ArrowLeft, Eye } from "lucide-react";
 
@@ -19,6 +21,7 @@ import {
   isUsernameAvailable,
 } from "../services/userService";
 import { buildAuthEmail } from "../utils/authEmail";
+import { pendingGuestPassword } from "../services/accessCodeService";
 import { maskPhone, onlyNumbers } from "../utils/phone";
 
 const PASSWORD_LENGTH = 8;
@@ -318,19 +321,33 @@ export default function FirstAccessExperience() {
   async function createAccount() {
     if (!passwordConfirmed || loading) return;
     let credential = null;
+    let accountSaved = false;
     try {
       setLoading(true);
       setErrorMessage("");
-      const authEmail = buildAuthEmail(username);
+      const authEmail = invite.pendingAuthEmail || buildAuthEmail(username);
       await signOut(auth);
-      credential = await createUserWithEmailAndPassword(auth, authEmail, password);
+      if (invite.pendingAuthEmail) {
+        credential = await signInWithEmailAndPassword(auth, invite.pendingAuthEmail, pendingGuestPassword(code));
+        await updatePassword(credential.user, password);
+      } else {
+        credential = await createUserWithEmailAndPassword(auth, authEmail, password);
+      }
       await createUserBaseData({ uid: credential.user.uid, preRegister: invite, username, authEmail });
+      accountSaved = true;
       await new Promise((resolve) => window.setTimeout(resolve, 2200));
       await signOut(auth);
       navigate("/login", { replace: true });
     } catch (error) {
       console.error(error);
-      if (credential?.user) await deleteUser(credential.user).catch(() => {});
+      if (credential?.user && !accountSaved) {
+        if (invite.pendingAuthEmail) {
+          await updatePassword(credential.user, pendingGuestPassword(code)).catch(() => {});
+          await signOut(auth).catch(() => {});
+        } else {
+          await deleteUser(credential.user).catch(() => {});
+        }
+      }
       setLoading(false);
       setPasswordConfirmed(false);
       setConfirmation("");

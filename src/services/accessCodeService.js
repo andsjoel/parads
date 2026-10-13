@@ -4,6 +4,10 @@ export function generateAccessCode() {
   return String(values[0] % 1_000_000).padStart(6, "0");
 }
 
+export function pendingGuestPassword(code) {
+  return `Parads!${code}`;
+}
+
 export function generateAccessCodeSalt() {
   const values = new Uint8Array(16);
   crypto.getRandomValues(values);

@@ -30,6 +30,8 @@ export async function getPublicProfileBundle(userId) {
     ? statsResult.value
     : null;
 
+  if (!inventorySnap?.exists() || !statsSnap?.exists()) return null;
+
   return {
     user: {
       id: userSnap.id,
@@ -60,6 +62,26 @@ export async function getPublicProfileBundles(userIds) {
       [bundle.user.id]: bundle,
     };
   }, {});
+}
+
+export async function getPublicProfileDirectory() {
+  const [profilesSnapshot, inventorySnapshot] = await Promise.all([
+    getDocs(collection(db, "public_profiles")),
+    getDocs(collection(db, "user_inventory")),
+  ]);
+  const activeUserIds = new Set(inventorySnapshot.docs.map((item) => item.id));
+
+  return profilesSnapshot.docs
+    .filter((profileDoc) => activeUserIds.has(profileDoc.id))
+    .map((profileDoc) => ({
+      id: profileDoc.id,
+      ...profileDoc.data(),
+    }))
+    .sort((first, second) => {
+      const firstName = first.profile?.displayName || first.fullName || first.username || "";
+      const secondName = second.profile?.displayName || second.fullName || second.username || "";
+      return firstName.localeCompare(secondName, "pt-BR", { sensitivity: "base" });
+    });
 }
 
 function getPublicUserPayload(user) {

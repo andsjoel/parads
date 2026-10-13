@@ -7,7 +7,7 @@ import { ArrowRight } from "lucide-react";
 import loginBackground from "../assets/app-backgrounds/bg-login.png";
 import { auth } from "../firebase/firebase";
 import { preloadUserSession } from "../services/sessionDataService";
-import { buildAuthEmail } from "../utils/authEmail";
+import { resolveLoginEmail } from "../services/authServices";
 
 const PASSWORD_LENGTH = 8;
 
@@ -149,7 +149,7 @@ export default function LoginNew() {
       try {
         const credential = await signInWithEmailAndPassword(
           auth,
-          buildAuthEmail(login.trim()),
+          await resolveLoginEmail(login.trim()),
           password,
         );
         const session = await preloadUserSession(credential.user.uid);

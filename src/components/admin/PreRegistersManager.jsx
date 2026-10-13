@@ -6,6 +6,7 @@ import {
   ChevronDown,
   Copy,
   Mars,
+  Pencil,
   Plus,
   Search,
   Trash2,
@@ -13,14 +14,17 @@ import {
   Venus,
   X,
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
+import { useAuth } from "../../contexts/AuthContext";
 import {
-  createPreRegister,
   getPreRegisters,
+  updatePreRegister,
+  regenerateInviteAccessCode,
 } from "../../services/preRegisterService";
 
 import ConfirmDeleteModal from "../../components/ConfirmDeleteModal";
 import OrbitLoader from "../../components/OrbitLoader";
+import InviteCreateModal from "./InviteCreateModal";
 import generalBackground from "../../assets/app-backgrounds/bg-geral.png";
 
 import { deleteUserCascadeByPreRegister } from "../../services/userService";
@@ -90,7 +94,10 @@ function IdvSelect({ value, onChange, options, ariaLabel, large = false }) {
         onClick={() => setIsOpen((current) => !current)}
         className={`admin-select-trigger ${isOpen ? "admin-select-trigger--open" : ""}`}
       >
-        <span>{selected.label}</span>
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span>{selected.label}</span>
+          {selected.count !== undefined && <small className="text-[10px] font-normal opacity-55">({selected.count})</small>}
+        </span>
         <ChevronDown size={16} className={`transition-transform ${isOpen ? "rotate-180" : ""}`} />
       </button>
       {isOpen && (
@@ -107,7 +114,10 @@ function IdvSelect({ value, onChange, options, ariaLabel, large = false }) {
               }}
               className={`admin-select-option ${option.value === value ? "admin-select-option--selected" : ""}`}
             >
-              <span>{option.label}</span>
+              <span className="flex min-w-0 items-center gap-1.5">
+                <span>{option.label}</span>
+                {option.count !== undefined && <small className="text-[10px] font-normal opacity-55">({option.count})</small>}
+              </span>
               {option.value === value && <Check size={14} />}
             </button>
           ))}
@@ -118,6 +128,7 @@ function IdvSelect({ value, onChange, options, ariaLabel, large = false }) {
 }
 
 export default function PreRegistersManager() {
+  const { isAdmin, loadingAuth } = useAuth();
   const [preRegisters, setPreRegisters] = useState([]);
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
@@ -138,6 +149,23 @@ export default function PreRegistersManager() {
 
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false); 
+  const [editTarget, setEditTarget] = useState(null);
+  const [listError, setListError] = useState("");
+  const [regeneratingId, setRegeneratingId] = useState("");
+
+  const countedTypeOptions = useMemo(() => typeFilterOptions.map((option) => ({
+    ...option,
+    count: option.value === "all" ? preRegisters.length : preRegisters.filter(
+      (invite) => (invite.role || invite.type || "member") === option.value,
+    ).length,
+  })), [preRegisters]);
+
+  const countedStatusOptions = useMemo(() => statusFilterOptions.map((option) => ({
+    ...option,
+    count: option.value === "all" ? preRegisters.length : preRegisters.filter(
+      (invite) => option.value === "claimed" ? Boolean(invite.claimed) : !invite.claimed,
+    ).length,
+  })), [preRegisters]);
 
   async function loadPreRegisters() {
     setIsLoading(true);
@@ -145,14 +173,18 @@ export default function PreRegistersManager() {
     try {
       const data = await getPreRegisters();
       setPreRegisters(data);
+      setListError("");
+    } catch (error) {
+      console.error(error);
+      setListError("Não foi possível carregar os convites.");
     } finally {
       setIsLoading(false);
     }
   }
 
   useEffect(() => {
-    loadPreRegisters();
-  }, []);
+    if (isAdmin) loadPreRegisters();
+  }, [isAdmin]);
 
   const filteredPreRegisters = useMemo(() => {
     const cleanSearch = search.trim().toLowerCase();
@@ -162,7 +194,7 @@ export default function PreRegistersManager() {
       const matchesSearch =
         !cleanSearch ||
         item.fullName?.toLowerCase().includes(cleanSearch) ||
-        item.phone?.includes(searchNumbers);
+        (Boolean(searchNumbers) && item.phone?.includes(searchNumbers));
 
       const matchesType = typeFilter === "all" || item.role === typeFilter;
 
@@ -177,45 +209,17 @@ export default function PreRegistersManager() {
 
   async function handleCreatePreRegister(event) {
     event.preventDefault();
-
-    const phoneNumbers = onlyNumbers(phone);
-
-    if (!fullName.trim()) {
-      setCreateError("Informe o nome completo.");
-      return;
-    }
-    if (phoneNumbers.length !== 11) {
-      setCreateError("Informe um celular com DDD.");
-      return;
-    }
-
+    if (!editTarget || isSaving) return;
     try {
       setIsSaving(true);
       setCreateError("");
-
-      const created = await createPreRegister({
-        fullName,
-        phone: phoneNumbers,
-        type: "member",
-        role,
-        sex,
-      });
-
-      setFullName("");
-      setPhone("");
-      setRole("member");
-      setSex("male");
-      setShowModal(false);
-      setCreatedInvite(created);
-
+      await updatePreRegister(editTarget.id, { role, sex });
       await loadPreRegisters();
+      setShowModal(false);
+      setEditTarget(null);
     } catch (error) {
       console.error(error);
-      setCreateError(
-        error?.code === "permission-denied"
-          ? "Sua sessão não tem permissão de administrador. Recarregue o app e tente novamente."
-          : "Não foi possível criar o convite. Tente novamente.",
-      );
+      setCreateError("Não foi possível salvar as alterações.");
     } finally {
       setIsSaving(false);
     }
@@ -239,8 +243,7 @@ export default function PreRegistersManager() {
     }
   }
 
-  async function handleCopyAccessCode() {
-    const code = createdInvite?.temporaryCode;
+  async function handleCopyAccessCode(code = createdInvite?.temporaryCode, copyId = "created") {
     if (!code) return;
 
     const copyWithSelection = () => {
@@ -266,7 +269,7 @@ export default function PreRegistersManager() {
       } else {
         copyWithSelection();
       }
-      setCodeCopied(true);
+      setCodeCopied(copyId);
       window.setTimeout(() => setCodeCopied(false), 2000);
     } catch (error) {
       console.error(error);
@@ -274,10 +277,29 @@ export default function PreRegistersManager() {
     }
   }
 
+  async function handleRegenerateCode(item) {
+    try {
+      setRegeneratingId(item.id);
+      setListError("");
+      const code = await regenerateInviteAccessCode(item.id);
+      setPreRegisters((current) => current.map((invite) => invite.id === item.id
+        ? { ...invite, temporaryCode: code }
+        : invite));
+    } catch (error) {
+      console.error(error);
+      setListError("Não foi possível gerar o código de acesso.");
+    } finally {
+      setRegeneratingId("");
+    }
+  }
+
+  if (loadingAuth) return <div className="flex min-h-screen items-center justify-center"><OrbitLoader /></div>;
+  if (!isAdmin) return <Navigate to="/menu" replace />;
+
   return (
-    <main className="admin-page min-h-screen px-5 pb-28 pt-6 text-white" style={{ backgroundImage: `url(${generalBackground})` }}>
-      <section className="mx-auto flex w-full max-w-[420px] flex-col">
-        <div className="mb-5 flex items-center justify-between">
+    <main className="admin-page h-[100dvh] overflow-hidden px-5 pb-[calc(90px+env(safe-area-inset-bottom))] pt-6 text-white" style={{ backgroundImage: `url(${generalBackground})` }}>
+      <section className="mx-auto flex h-full min-h-0 w-full max-w-[420px] flex-col">
+        <div className="mb-5 flex shrink-0 items-center justify-between">
           <div className="flex items-center gap-3">
             <Link
               to="/menu"
@@ -291,14 +313,22 @@ export default function PreRegistersManager() {
 
           <button
             type="button"
-            onClick={() => setShowModal(true)}
+            onClick={() => {
+              setEditTarget(null);
+              setFullName("");
+              setPhone("");
+              setRole("member");
+              setSex("male");
+              setCreateError("");
+              setShowModal(true);
+            }}
             className="admin-primary-action flex h-11 w-11 items-center justify-center active:scale-95"
           >
             <Plus size={20} />
           </button>
         </div>
 
-        <div className="admin-panel mb-4 p-3">
+        <div className="admin-panel relative z-20 mb-4 shrink-0 p-3">
           <div className="admin-search flex h-11 items-center gap-2 px-4">
             <Search size={17} className="text-slate-500" />
 
@@ -311,12 +341,14 @@ export default function PreRegistersManager() {
           </div>
 
           <div className="mt-3 grid grid-cols-2 gap-2">
-            <IdvSelect value={typeFilter} onChange={setTypeFilter} options={typeFilterOptions} ariaLabel="Filtrar por tipo" />
+            <IdvSelect value={typeFilter} onChange={setTypeFilter} options={countedTypeOptions} ariaLabel="Filtrar por tipo" />
 
-            <IdvSelect value={statusFilter} onChange={setStatusFilter} options={statusFilterOptions} ariaLabel="Filtrar por status" />
+            <IdvSelect value={statusFilter} onChange={setStatusFilter} options={countedStatusOptions} ariaLabel="Filtrar por status" />
           </div>
         </div>
 
+        {listError && <p role="alert" className="mb-3 text-xs text-red-300">{listError}</p>}
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-5 pr-1">
         {isLoading ? (
           <div className="mt-8 flex justify-center">
             <OrbitLoader size={32} />
@@ -354,14 +386,49 @@ export default function PreRegistersManager() {
                         {item.sex === "female" ? "Mulher" : "Homem"}
                       </span>
                     </div>
+                    {!item.claimed && (
+                      <div className="mx-4 mb-4 flex items-center justify-between gap-2 border border-[#ff713f]/25 bg-black/20 p-3">
+                        {item.temporaryCode ? (
+                          <>
+                            <div>
+                              <p className="text-[10px] text-white/45">Código de acesso</p>
+                              <p className="text-xl text-[#ff8a4c]">{item.temporaryCode}</p>
+                            </div>
+                            <button type="button" onClick={() => handleCopyAccessCode(item.temporaryCode, item.id)} className="profile-modal-close flex h-10 w-10 items-center justify-center" aria-label="Copiar código" title="Copiar código">
+                              {codeCopied === item.id ? <Check size={17} /> : <Copy size={17} />}
+                            </button>
+                          </>
+                        ) : (
+                          <div className="w-full">
+                          <p className="mb-2 text-[10px] text-white/45">O código antigo não pode ser recuperado. Gerar um novo substitui o anterior.</p>
+                          <button type="button" disabled={Boolean(regeneratingId)} onClick={() => handleRegenerateCode(item)} className="admin-primary-action flex min-h-10 w-full items-center justify-center gap-2 px-3 text-xs disabled:opacity-50">
+                            {regeneratingId === item.id ? "Gerando..." : "Gerar novo código"}
+                          </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    <div className="mx-4 mb-4 grid grid-cols-2 gap-2">
                     <button
                       type="button"
                       onClick={() => setDeleteTarget(item)}
-                      className="admin-delete-action mx-4 mb-4 flex h-10 w-[calc(100%_-_2rem)] items-center justify-center gap-2 text-sm"
+                      className="admin-delete-action flex h-10 items-center justify-center gap-2 text-xs"
                     >
                       <Trash2 size={16} />
                       excluir convite
                     </button>
+                    <button type="button" onClick={() => {
+                      setEditTarget(item);
+                      setFullName(item.fullName || "");
+                      setPhone(item.phone || "");
+                      setRole(item.role || item.type || "member");
+                      setSex(item.sex || "male");
+                      setCreateError("");
+                      setShowModal(true);
+                    }} className="admin-primary-action flex h-10 items-center justify-center gap-2 text-xs">
+                      <Pencil size={16} /> editar
+                    </button>
+                    </div>
                   </div>
                 </div>
               );
@@ -374,16 +441,28 @@ export default function PreRegistersManager() {
             )}
           </div>
         )}
+        </div>
       </section>
 
-      {showModal && (
+      {showModal && !editTarget && (
+        <InviteCreateModal
+          onClose={() => setShowModal(false)}
+          onCreated={async (invite) => {
+            setShowModal(false);
+            setCreatedInvite(invite);
+            await loadPreRegisters();
+          }}
+        />
+      )}
+
+      {showModal && editTarget && (
         <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/60 px-5 pb-5 backdrop-blur-sm">
           <form
             onSubmit={handleCreatePreRegister}
             className="profile-edit-modal w-full max-w-[420px] p-5"
           >
             <div className="mb-5 flex items-center justify-between">
-              <h2 className="font-idv-title text-2xl">Novo convite</h2>
+              <h2 className="font-idv-title text-2xl">{editTarget ? "Editar convite" : "Novo convite"}</h2>
 
               <button
                 type="button"
@@ -397,6 +476,7 @@ export default function PreRegistersManager() {
             <div className="flex flex-col gap-3">
               <input
                 value={fullName}
+                disabled={Boolean(editTarget)}
                 onChange={(event) => setFullName(event.target.value)}
                 placeholder="Nome completo"
                 className="admin-input h-12 px-4 text-sm text-white outline-none placeholder:text-white/30"
@@ -404,6 +484,7 @@ export default function PreRegistersManager() {
 
               <input
                 value={phone}
+                disabled={Boolean(editTarget)}
                 onChange={(event) => setPhone(maskPhone(event.target.value))}
                 placeholder="61 9 9999-9999"
                 inputMode="numeric"
@@ -456,8 +537,8 @@ export default function PreRegistersManager() {
                 disabled={isSaving}
                 className="admin-primary-action mt-2 flex h-12 items-center justify-center gap-2 text-sm disabled:opacity-50"
               >
-                <UserPlus size={18} />
-                {isSaving ? "Salvando..." : "Adicionar"}
+                {editTarget ? <Check size={18} /> : <UserPlus size={18} />}
+                {isSaving ? "Salvando..." : editTarget ? "Salvar" : "Adicionar"}
               </button>
 
               {createError && (
@@ -478,15 +559,15 @@ export default function PreRegistersManager() {
               {createdInvite.temporaryCode}
             </p>
             <p className="mt-3 text-sm text-slate-500">
-              Envie este código para {createdInvite.fullName}. Ele não será exibido novamente.
+              Envie este código para {createdInvite.fullName}. Ele ficará disponível nos detalhes do convite enquanto estiver pendente.
             </p>
             <button
               type="button"
-              onClick={handleCopyAccessCode}
+              onClick={() => handleCopyAccessCode()}
               className="admin-primary-action mt-5 flex h-12 w-full items-center justify-center gap-2 text-sm"
             >
-              {codeCopied ? <Check size={17} /> : <Copy size={17} />}
-              {codeCopied ? "Código copiado" : "Copiar código"}
+              {codeCopied === "created" ? <Check size={17} /> : <Copy size={17} />}
+              {codeCopied === "created" ? "Código copiado" : "Copiar código"}
             </button>
             <button
               type="button"

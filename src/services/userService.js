@@ -1,6 +1,7 @@
 import {
   doc,
   getDoc,
+  runTransaction,
   writeBatch,
   serverTimestamp,
 } from "firebase/firestore";
@@ -29,6 +30,8 @@ export async function deleteUserCascadeByPreRegister(preRegisterId) {
 
   const batch = writeBatch(db);
 
+  batch.delete(doc(db, "invite_access_codes", preRegisterId));
+
   if (!uid) {
     batch.delete(preRegisterRef);
     await batch.commit();
@@ -47,6 +50,7 @@ export async function deleteUserCascadeByPreRegister(preRegisterId) {
   batch.delete(doc(db, "user_stats", uid));
   batch.delete(doc(db, "user_inventory", uid));
   batch.delete(doc(db, "user_showcase", uid));
+  batch.delete(doc(db, "public_profiles", uid));
 
   if (username) {
     batch.delete(doc(db, "usernames", username));
@@ -57,6 +61,9 @@ export async function deleteUserCascadeByPreRegister(preRegisterId) {
 
 export async function createUserBaseData({ uid, preRegister, username, authEmail }) {
   const cleanUsername = username.trim().toLowerCase();
+  if (preRegister.pendingAuthEmail) {
+    return activateGuestBaseData({ uid, preRegister, username: cleanUsername, authEmail });
+  }
   const role = preRegister.role || preRegister.type || "member";
   const type = role;
   const sex = preRegister.sex || "male";
@@ -124,6 +131,7 @@ export async function createUserBaseData({ uid, preRegister, username, authEmail
   batch.set(usernameRef, {
     uid,
     username: cleanUsername,
+    authEmail,
     createdAt: serverTimestamp(),
   });
 
@@ -178,4 +186,32 @@ export async function createUserBaseData({ uid, preRegister, username, authEmail
   });
 
   await batch.commit();
+}
+
+async function activateGuestBaseData({ uid, preRegister, username, authEmail }) {
+  return runTransaction(db, async (transaction) => {
+    const inviteRef = doc(db, "pre_registered_users", preRegister.id);
+    const userRef = doc(db, "users", uid);
+    const usernameRef = doc(db, "usernames", username);
+    const [inviteSnap, userSnap, usernameSnap] = await Promise.all([
+      transaction.get(inviteRef), transaction.get(userRef), transaction.get(usernameRef),
+    ]);
+    const invite = inviteSnap.data();
+    if (!inviteSnap.exists() || !invite.enabled || invite.claimed
+      || invite.userId !== uid || !userSnap.exists()) {
+      throw new Error("Convite indisponível.");
+    }
+    if (usernameSnap.exists()) throw new Error("Esse usuário já está em uso.");
+    const user = userSnap.data();
+    const changes = { username, authEmail, firstAccessPending: false, updatedAt: serverTimestamp() };
+    transaction.update(userRef, changes);
+    transaction.set(doc(db, "public_profiles", uid), {
+      fullName: user.fullName, username, profile: user.profile,
+      role: user.role, type: user.type, sex: user.sex,
+      progression: { coins: user.progression?.coins ?? INITIAL_COIN_BALANCE },
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+    transaction.set(usernameRef, { uid, username, authEmail, createdAt: serverTimestamp() });
+    transaction.update(inviteRef, { claimed: true, userId: uid, claimedAt: serverTimestamp() });
+  });
 }

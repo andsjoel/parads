@@ -1,8 +1,10 @@
 /* eslint-disable react/prop-types */
-import { useEffect, useState } from "react";
-import { BarChart3, CalendarDays, Gamepad2, Trophy } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { BarChart3, CalendarDays, ClipboardList, Gamepad2, MessageCircle, Palette, Store, Target, Trophy, User } from "lucide-react";
+import { GiVolleyballBall } from "react-icons/gi";
 
 import feedBanner from "../assets/app-backgrounds/bg-banner-feed.png";
+import generalBackground from "../assets/app-backgrounds/bg-geral.png";
 import OrbitLoader from "../components/OrbitLoader";
 import {
   PlayerMiniCard,
@@ -10,7 +12,9 @@ import {
 } from "../components/profile/ProfileCardPreview";
 import { useAuth } from "../contexts/AuthContext";
 import {
+  getPublicProfileBundle,
   getPublicProfileBundles,
+  getPublicProfileDirectory,
   syncAllPublicProfilesOnce,
 } from "../services/publicProfileService";
 import { subscribeFeedPosts } from "../services/volleyReportService";
@@ -30,6 +34,7 @@ export default function Feed() {
   const [selectedPerson, setSelectedPerson] = useState(null);
   const [loadingProfileId, setLoadingProfileId] = useState("");
   const [publicProfilesRevision, setPublicProfilesRevision] = useState(0);
+  const [guideAdmin, setGuideAdmin] = useState(null);
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -81,6 +86,37 @@ export default function Feed() {
       .catch((error) => console.error(error));
   }, [posts, publicProfilesRevision]);
 
+  useEffect(() => {
+    if (loading || posts.length || guideAdmin) return undefined;
+
+    let isCurrent = true;
+    getPublicProfileDirectory()
+      .then((members) => {
+        const admin = members.find((member) => member.role === "admin" || member.type === "admin");
+        if (!admin) return null;
+        return getPublicProfileBundle(admin.id).then((bundle) => ({ admin, bundle }));
+      })
+      .then((result) => {
+        if (!isCurrent || !result?.bundle) return;
+        const entry = {
+          userId: result.admin.id,
+          displayName: result.bundle.user?.profile?.displayName
+            || result.bundle.user?.fullName
+            || "ADM",
+        };
+        setGuideAdmin(entry);
+        setProfilesById((current) => ({
+          ...current,
+          [entry.userId]: result.bundle,
+        }));
+      })
+      .catch((error) => console.warn("Não foi possível carregar o perfil do ADM:", error));
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [guideAdmin, loading, posts.length]);
+
   async function openProfile(item) {
     if (!item.userId) return;
     setSelectedPerson({
@@ -99,8 +135,11 @@ export default function Feed() {
   }
 
   return (
-    <main className="min-h-screen pb-28 text-white">
-      <section className="mx-auto flex w-full max-w-[420px] flex-col gap-4">
+    <main
+      className={`feed-page text-white ${!loading && posts.length === 0 ? "feed-page--welcome" : "min-h-screen pb-28"}`}
+      style={{ backgroundImage: `url(${generalBackground})` }}
+    >
+      <section className="feed-content mx-auto flex w-full max-w-[420px] flex-col gap-4">
         <div className="feed-banner relative aspect-[3/1] w-full overflow-hidden">
           <img
             src={feedBanner}
@@ -114,8 +153,15 @@ export default function Feed() {
             </p>
           </div>
         </div>
-        <div className="space-y-4 px-5">
+        <div className="feed-posts space-y-4 px-5">
           {loading && <div className="flex justify-center py-10"><OrbitLoader size={30} /></div>}
+          {!loading && posts.length === 0 && (
+            <MemberQuickGuide
+              admin={guideAdmin}
+              adminBundle={guideAdmin ? profilesById[guideAdmin.userId] : null}
+              onOpenProfile={openProfile}
+            />
+          )}
           {!loading && posts
             .filter((post) => post.type !== "games")
             .map((post) => (
@@ -138,6 +184,137 @@ export default function Feed() {
         />
       )}
     </main>
+  );
+}
+
+const memberGuideItems = [
+  {
+    title: "welcome",
+    description: "Bem-vindo! 😊 Olha esse guia rápido:",
+  },
+  {
+    icon: ClipboardList,
+    title: "Lista",
+    description: "Aqui é onde será lançada a lista todo domingo. Coloque seu nome para participar!",
+  },
+  {
+    icon: GiVolleyballBall,
+    title: "Partidas",
+    description: "Nesse você acompanha os jogos e sua vez de jogar.",
+  },
+  {
+    icon: User,
+    title: "Perfil",
+    description: "O perfil é todo seu para customizar! Suas estatísticas e moedas também ficam lá.",
+  },
+  {
+    icon: Palette,
+    title: "Personalização",
+    description: "No perfil você escolhe foto, borda, capa, carta, ícone e status.",
+  },
+  {
+    icon: Target,
+    title: "Missões",
+    description: "Toque em cada estatística para acompanhar e resgatar suas recompensas.",
+  },
+  {
+    icon: Store,
+    title: "Loja",
+    description: "Use suas moedas para liberar novos itens de personalização.",
+  },
+  {
+    title: "finish",
+    description: "Agora clique no meu card lá em cima para ver como fica uma carta personalizada!",
+  },
+  {
+    title: "catchphrase",
+    description: "Ah, e lembre-se: ISSO NÃO É UMA DEMOCRACIA!",
+  },
+];
+
+// Kept in memory across navigation; a page reload starts a new conversation.
+const guideConversation = { isOpen: false, visibleCount: 0 };
+
+function MemberQuickGuide({ admin, adminBundle, onOpenProfile }) {
+  const [isOpen, setIsOpen] = useState(guideConversation.isOpen);
+  const [visibleCount, setVisibleCount] = useState(guideConversation.visibleCount);
+  const [isTyping, setIsTyping] = useState(false);
+  const messagesRef = useRef(null);
+  const followMessagesRef = useRef(true);
+
+  useEffect(() => {
+    if (!admin || !isOpen) return undefined;
+    const limit = memberGuideItems.length;
+    if (visibleCount >= limit) return undefined;
+
+    const typingTimer = window.setTimeout(() => setIsTyping(true), 650);
+    const messageTimer = window.setTimeout(() => {
+      setIsTyping(false);
+      guideConversation.visibleCount = visibleCount + 1;
+      setVisibleCount(guideConversation.visibleCount);
+    }, visibleCount === 0 ? 2500 : 5500);
+
+    return () => {
+      window.clearTimeout(typingTimer);
+      window.clearTimeout(messageTimer);
+    };
+  }, [admin, isOpen, visibleCount]);
+
+  useEffect(() => {
+    const container = messagesRef.current;
+    if (container && followMessagesRef.current) {
+      container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+    }
+  }, [visibleCount, isTyping]);
+
+  return (
+    <div className="feed-guide-chat">
+      <div className="feed-guide-sender">
+      {admin && (
+        <PlayerMiniCard
+          person={{ id: admin.userId, name: admin.displayName }}
+          profileBundle={adminBundle}
+          onOpen={() => onOpenProfile(admin)}
+        />
+      )}
+      {!isOpen && (
+        <button type="button" onClick={() => {
+          followMessagesRef.current = true;
+          guideConversation.isOpen = true;
+          setIsOpen(true);
+        }} className="register-paper-action mt-3 flex h-11 w-full items-center justify-center gap-2 text-sm font-black">
+          <MessageCircle size={18} /> abrir mensagem
+        </button>
+      )}
+      </div>
+
+      <div
+        ref={messagesRef}
+        className="feed-guide-messages"
+        role="log"
+        aria-label="Mensagens do ADM"
+        aria-live="polite"
+        onScroll={(event) => {
+          const container = event.currentTarget;
+          followMessagesRef.current = container.scrollHeight - container.scrollTop - container.clientHeight < 48;
+        }}
+      >
+        {memberGuideItems.slice(0, visibleCount).map(({ icon: Icon, title, description }) => (
+          <div key={title} className="feed-guide-bubble">
+            {Icon && <span className="feed-guide-icon flex h-8 w-8 shrink-0 items-center justify-center"><Icon size={17} /></span>}
+            <div className="min-w-0">
+              {Icon && <strong className="mb-1 block text-sm font-black text-[#fffaf0]">{title}</strong>}
+              <p className="text-xs font-semibold leading-relaxed text-white/80">{description}</p>
+            </div>
+          </div>
+        ))}
+        {isTyping && (
+          <div className="feed-guide-bubble feed-guide-typing" role="status" aria-label="ADM está digitando">
+            <span /><span /><span />
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 

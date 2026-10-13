@@ -1,14 +1,13 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { BarChart3, LogOut, Settings, ShieldCheck, UserPlus, Users, Volleyball, X } from "lucide-react";
+import { BarChart3, GalleryVerticalEnd, LogOut, ShieldCheck, UserPlus, Volleyball, X } from "lucide-react";
 
 import { useAuth } from "../contexts/AuthContext";
 import { logoutUser } from "../services/authServices";
 import generalBackground from "../assets/app-backgrounds/bg-geral.png";
 
 const publicServices = [
-  { title: "Atletas", description: "Lista da galera", icon: Users, to: "#", disabled: true, tone: "athletes" },
-  { title: "Arena", description: "Informacoes da quadra", icon: Settings, to: "#", disabled: true, tone: "arena" },
+  { title: "Cartas", description: "Veja o perfil dos atletas", icon: GalleryVerticalEnd, to: "/cards", tone: "athletes" },
 ];
 
 const adminServices = [

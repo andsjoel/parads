@@ -947,7 +947,7 @@ export async function addVolleyMatchPlayer({ listId, userData, overrides = {} })
   const listRef = doc(db, COLLECTION_NAME, listId);
   const statsRef = userData.id ? doc(db, "user_stats", userData.id) : null;
 
-  await runTransaction(db, async (transaction) => {
+  return runTransaction(db, async (transaction) => {
     const [listSnap, statsSnap] = await Promise.all([
       transaction.get(listRef),
       statsRef ? transaction.get(statsRef) : Promise.resolve(null),
@@ -1010,46 +1010,6 @@ export async function addVolleyMatchPlayer({ listId, userData, overrides = {} })
       redoHistory: [],
       updatedAt: serverTimestamp(),
     });
-  });
-}
-
-export async function addGhostPlayer({ listId, displayName, sex = "male", isSetter = false }) {
-  const listRef = doc(db, COLLECTION_NAME, listId);
-
-  return runTransaction(db, async (transaction) => {
-    const listSnap = await transaction.get(listRef);
-    if (!listSnap.exists()) throw new Error("Lista nao encontrada.");
-
-    const list = listSnap.data();
-    const matchPlayer = {
-      entryId: createId("ghost"),
-      kind: "ghost",
-      userId: null,
-      displayName: displayName.trim(),
-      username: "",
-      sex,
-      isSetter,
-      addedAt: new Date().toISOString(),
-      removedAt: null,
-      stats: emptyPlayerStats(),
-    };
-    const nextList = {
-      ...list,
-      matchPlayers: [...(list.matchPlayers || []), matchPlayer],
-    };
-    const teams = list.status === "in_progress" && list.teamsFormedAt
-      ? addPlayerToTeams(nextList, matchPlayer.entryId)
-      : list.teams || [];
-
-    transaction.update(listRef, {
-      matchPlayers: nextList.matchPlayers,
-      teams,
-      summary: summarize({ ...nextList, teams }),
-      history: appendHistory(list),
-      redoHistory: [],
-      updatedAt: serverTimestamp(),
-    });
-
     return matchPlayer;
   });
 }

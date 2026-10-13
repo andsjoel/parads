@@ -14,6 +14,7 @@ import Shop from "../pages/Shop";
 
 import AdminVolleyList from "../pages/AdminVolleyList";
 import AdminReports from "../pages/AdminReports";
+import Cards from "../pages/Cards";
 
 export default function AppRoutes() {
   return (
@@ -36,6 +37,7 @@ export default function AppRoutes() {
         <Route path="matches" element={<MatchList mode="matches" />} />
         <Route path="profile" element={<Profile />} />
         <Route path="shop" element={<Shop />} />
+        <Route path="cards" element={<Cards />} />
 
         <Route path="menu" element={<Admin />} />
         <Route path="admin" element={<Navigate to="/menu" replace />} />
