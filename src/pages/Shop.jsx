@@ -8,6 +8,7 @@ import OrbitLoader from "../components/OrbitLoader";
 import ProfileHeader from "../components/profile/ProfileHeader";
 import ProfileStats from "../components/profile/ProfileStats";
 import ProfileBackgroundMedia from "../components/profile/ProfileBackgroundMedia";
+import ProfileCoverPreview from "../components/profile/ProfileCoverPreview";
 import { useAuth } from "../contexts/AuthContext";
 import { profileBackgroundsCatalog } from "../data/profileBackgroundsCatalog";
 import { profilePicsCatalog } from "../data/profilePicsCatalog";
@@ -30,25 +31,38 @@ export default function Shop() {
   const [inventory, setInventory] = useState(sessionData?.inventory || {});
   const [categoryId, setCategoryId] = useState("profilePic");
   const [theme, setTheme] = useState("all");
+  const [rarity, setRarity] = useState("all");
   const [viewMode, setViewMode] = useState("all");
   const [isThemeMenuOpen, setIsThemeMenuOpen] = useState(false);
+  const [isRarityMenuOpen, setIsRarityMenuOpen] = useState(false);
   const [previewItem, setPreviewItem] = useState(null);
   const [purchaseTarget, setPurchaseTarget] = useState(null);
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [purchaseError, setPurchaseError] = useState("");
   const [purchaseSuccess, setPurchaseSuccess] = useState(null);
   const themeMenuRef = useRef(null);
+  const rarityMenuRef = useRef(null);
 
   useEffect(() => setUser(userData), [userData]);
   useEffect(() => setInventory(sessionData?.inventory || {}), [sessionData?.inventory]);
   useEffect(() => {
-    if (!isThemeMenuOpen) return undefined;
+    if (!isThemeMenuOpen && !isRarityMenuOpen) return undefined;
     const closeMenu = (event) => {
       if (!themeMenuRef.current?.contains(event.target)) setIsThemeMenuOpen(false);
+      if (!rarityMenuRef.current?.contains(event.target)) setIsRarityMenuOpen(false);
+    };
+    const closeOnEscape = (event) => {
+      if (event.key !== "Escape") return;
+      setIsThemeMenuOpen(false);
+      setIsRarityMenuOpen(false);
     };
     document.addEventListener("pointerdown", closeMenu);
-    return () => document.removeEventListener("pointerdown", closeMenu);
-  }, [isThemeMenuOpen]);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeMenu);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [isThemeMenuOpen, isRarityMenuOpen]);
 
   const catalogs = useMemo(() => ({
     profilePic: getCatalogAssetList(profileAssetFiles.profilePicImages, profilePicsCatalog),
@@ -60,13 +74,15 @@ export default function Shop() {
   const category = categories.find((item) => item.id === categoryId);
   const categoryItems = catalogs[categoryId] || [];
   const themes = ["all", ...new Set(categoryItems.map((item) => item.theme || "normal"))];
-  const themedItems = theme === "all"
-    ? categoryItems
-    : categoryItems.filter((item) => (item.theme || "normal") === theme);
+  const rarities = [...new Set(categoryItems.map((item) => item.rarity || "normal"))]
+    .sort((first, second) => getItemRarity(first).order - getItemRarity(second).order);
+  const filteredItems = categoryItems.filter((item) =>
+    (theme === "all" || (item.theme || "normal") === theme)
+    && (rarity === "all" || (item.rarity || "normal") === rarity));
   const isOwned = (item) => inventory?.[category.inventory]?.includes(item.id);
   const items = viewMode === "all"
-    ? themedItems
-    : themedItems.filter((item) => !isOwned(item));
+    ? filteredItems
+    : filteredItems.filter((item) => !isOwned(item));
 
   async function buyItem() {
     if (!purchaseTarget || !user?.id) return;
@@ -107,16 +123,16 @@ export default function Shop() {
 
         <div className="mb-5 grid grid-cols-4 gap-2" role="tablist">
           {categories.map(({ id, label, icon: Icon }) => (
-            <button key={id} type="button" onClick={() => { setCategoryId(id); setTheme("all"); setPreviewItem(null); }} className={`shop-category flex h-16 flex-col items-center justify-center gap-1 ${categoryId === id ? "shop-category--active" : ""}`}>
+            <button key={id} type="button" onClick={() => { setCategoryId(id); setTheme("all"); setRarity("all"); setIsThemeMenuOpen(false); setIsRarityMenuOpen(false); setPreviewItem(null); }} className={`shop-category flex h-16 flex-col items-center justify-center gap-1 ${categoryId === id ? "shop-category--active" : ""}`}>
               <Icon size={18} />
               <span className="text-[11px] font-black">{label}</span>
             </button>
           ))}
         </div>
 
-        <div className="mb-5 flex gap-2">
+        <div className="mb-2 flex gap-2">
           <div ref={themeMenuRef} className="profile-theme-select relative z-20 min-w-0 flex-1">
-            <button type="button" onClick={() => setIsThemeMenuOpen((current) => !current)} className={`profile-modal-select flex h-11 w-full items-center justify-between px-4 text-sm font-semibold text-white ${isThemeMenuOpen ? "profile-modal-select--open" : ""}`} aria-haspopup="listbox" aria-expanded={isThemeMenuOpen}>
+            <button type="button" onClick={() => { setIsThemeMenuOpen((current) => !current); setIsRarityMenuOpen(false); }} className={`profile-modal-select flex h-11 w-full items-center justify-between px-4 text-sm font-semibold text-white ${isThemeMenuOpen ? "profile-modal-select--open" : ""}`} aria-haspopup="listbox" aria-expanded={isThemeMenuOpen}>
               <span className="truncate">{theme === "all" ? "Todos os temas" : theme.charAt(0).toUpperCase() + theme.slice(1)}</span>
               <ChevronDown size={17} className={`shrink-0 text-[#ff8b58] transition-transform ${isThemeMenuOpen ? "rotate-180" : ""}`} />
             </button>
@@ -145,10 +161,27 @@ export default function Shop() {
           </div>
         </div>
 
+        <div ref={rarityMenuRef} className={`profile-theme-select relative mb-5 ${isRarityMenuOpen ? "z-30" : "z-10"}`}>
+          <button type="button" onClick={() => { setIsRarityMenuOpen((current) => !current); setIsThemeMenuOpen(false); }} className={`profile-modal-select flex h-11 w-full items-center justify-between gap-2 px-4 text-sm font-semibold ${isRarityMenuOpen ? "profile-modal-select--open" : ""}`} aria-label="Filtrar por raridade" aria-haspopup="listbox" aria-expanded={isRarityMenuOpen} style={{ color: rarity === "all" ? "#ffffff" : getItemRarity(rarity).color }}>
+            <span className="truncate">{rarity === "all" ? "Todas as raridades" : getItemRarity(rarity).label}</span>
+            <ChevronDown size={17} className={`shrink-0 text-[#ff8b58] transition-transform ${isRarityMenuOpen ? "rotate-180" : ""}`} />
+          </button>
+          {isRarityMenuOpen && (
+            <div className="profile-theme-menu" role="listbox" aria-label="Raridades">
+              {["all", ...rarities].map((itemRarity) => (
+                <button key={itemRarity} type="button" role="option" aria-selected={rarity === itemRarity} onClick={() => { setRarity(itemRarity); setIsRarityMenuOpen(false); }} className={`profile-theme-option ${rarity === itemRarity ? "profile-theme-option--selected" : ""}`}>
+                  <span style={{ color: itemRarity === "all" ? "#ffffff" : getItemRarity(itemRarity).color }}>{itemRarity === "all" ? "Todas as raridades" : getItemRarity(itemRarity).label}</span>
+                  {rarity === itemRarity && <Check size={15} strokeWidth={2.5} />}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         <div className="grid grid-cols-2 gap-3">
           {items.map((item) => (
             <button key={item.id} type="button" onClick={() => setPreviewItem(item)} className="shop-item text-left active:scale-[0.98]">
-              <div className="relative h-36 overflow-hidden">
+              <div className={`relative overflow-hidden ${categoryId === "background" || categoryId === "profilePic" ? "aspect-square" : "h-36"}`}>
                 {categoryId === "displayCard" ? (
                   <div className={`display-card-preview ${item.previewClassName} h-full w-full`}>
                     {item.videoUrl && <ProfileBackgroundMedia src={item.videoUrl} animate={false} className="absolute inset-0 h-full w-full object-cover" />}
@@ -156,9 +189,9 @@ export default function Shop() {
                   </div>
                 ) : (
                   categoryId === "background" ? (
-                    <ProfileBackgroundMedia src={item.src} alt={item.name} animate={false} className="h-full w-full object-cover" />
+                    <ProfileBackgroundMedia src={item.src} alt={item.name} animate={false} className="h-full w-full object-cover object-center" />
                   ) : (
-                    <img src={item.src} alt={item.name} className="h-full w-full object-contain" />
+                    <img src={item.src} alt={item.name} className={categoryId === "profilePic" ? "profile-pic-image" : "h-full w-full object-contain"} />
                   )
                 )}
                 {isOwned(item) && <span className="shop-owned absolute right-2 top-2"><Check size={13} strokeWidth={3} /></span>}
@@ -175,7 +208,7 @@ export default function Shop() {
         </div>
         {!items.length && (
           <p className="py-10 text-center text-sm font-semibold text-white/35">
-            {viewMode === "all" ? "Nenhum item disponível neste tema." : "Você já possui todos os itens deste tema."}
+            {viewMode === "all" ? "Nenhum item encontrado com esses filtros." : "Nenhum item para comprar com esses filtros."}
           </p>
         )}
       </section>
@@ -242,7 +275,7 @@ function ShopPreview({ item, type, user, stats, owned, onClose, onBuy }) {
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-hidden">
+        <div className={`min-h-0 flex-1 ${type === "background" ? "overflow-y-auto" : "overflow-hidden"}`}>
           {type === "displayCard" ? (
             <article className={`profile-sticker-card ${item.immersive ? "relative h-full min-h-0 overflow-hidden bg-transparent" : `profile-edit-modal ${item.cardClassName} relative overflow-hidden p-3`}`}>
               {item.videoUrl && !item.immersive && <ProfileBackgroundMedia src={item.videoUrl} animate className="absolute inset-0 h-full w-full object-cover" />}
@@ -256,8 +289,12 @@ function ShopPreview({ item, type, user, stats, owned, onClose, onBuy }) {
                 <div className="relative mt-3"><ProfileStats stats={stats} immersive={item.immersive} /></div>
               </div>
             </article>
+          ) : type === "background" ? (
+            <div className="profile-edit-modal overflow-hidden p-3">
+              <ProfileCoverPreview src={item.src} name={item.name} animate />
+            </div>
           ) : (
-            <div className="profile-edit-modal p-4"><div className="profile-item-large-preview h-[55vh] overflow-hidden">{type === "background" ? <ProfileBackgroundMedia src={item.src} alt={item.name} animate className="h-full w-full object-cover" /> : <img src={item.src} alt={item.name} className="h-full w-full object-contain" />}</div></div>
+            <div className="profile-edit-modal p-4"><div className={`profile-item-large-preview overflow-hidden ${type === "profilePic" ? "mx-auto aspect-square w-full max-w-[55vh]" : "h-[55vh]"}`}><img src={item.src} alt={item.name} className={type === "profilePic" ? "profile-pic-image" : "h-full w-full object-contain"} /></div></div>
           )}
         </div>
       </div>

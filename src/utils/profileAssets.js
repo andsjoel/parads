@@ -1,5 +1,8 @@
+import { profileBackgroundsCatalog } from "../data/profileBackgroundsCatalog";
+import { profilePicsCatalog } from "../data/profilePicsCatalog";
+
 const backgroundImages = import.meta.glob(
-  "../assets/profile-backgrounds/**/*.{png,jpg,jpeg,webp,webm,mp4}",
+  "../assets/profile-backgrounds/**/*.{png,jpg,jpeg,webp,gif,webm,mp4}",
   {
     eager: true,
     import: "default",
@@ -26,13 +29,13 @@ export function getAssetById(files, id, fallbackId) {
   const targetId = id || fallbackId;
 
   const entry = Object.entries(files).find(([path]) =>
-    path.includes(`${targetId}.`),
+    path.endsWith(`/${targetId}`) || path.includes(`${targetId}.`),
   );
 
   if (entry) return entry[1];
 
   const fallback = Object.entries(files).find(([path]) =>
-    path.includes(`${fallbackId}.`),
+    path.endsWith(`/${fallbackId}`) || path.includes(`${fallbackId}.`),
   );
 
   return fallback?.[1] || "";
@@ -44,8 +47,9 @@ export function isVideoAsset(src = "") {
 
 function getStaticAssetById(files, id, fallbackId) {
   const targetId = id || fallbackId;
+  const thumbnailId = targetId.replace(/\.gif$/i, "");
   const thumbnail = Object.entries(files).find(([path]) =>
-    path.includes(`${targetId}-thumb.`),
+    path.includes(`${thumbnailId}-thumb.`),
   );
 
   return thumbnail?.[1] || getAssetById(files, targetId, fallbackId);
@@ -67,13 +71,13 @@ export function getProfileAssetUrls(profile = {}, options = {}) {
     : getAssetById;
   const backgroundUrl = getAssetById(
     backgroundImages,
-    profile.selectedBackgroundId,
+    profileBackgroundsCatalog.find((item) => item.id === profile.selectedBackgroundId)?.imageId || profile.selectedBackgroundId,
     "bg-default",
   );
 
   const profilePicUrl = getProfileAsset(
     profilePicImages,
-    profile.selectedProfilePicId,
+    profilePicsCatalog.find((item) => item.id === profile.selectedProfilePicId)?.imageId || profile.selectedProfilePicId,
     "pic-default",
   );
 

@@ -56,7 +56,7 @@ export function PlayerMiniCard({ person, profileBundle, onOpen, onRemove }) {
             alt={displayName}
             loading="lazy"
             decoding="async"
-            className="h-full w-full object-cover ring-2 ring-white/10"
+            className="profile-pic-image ring-2 ring-white/10"
           />
 
           {profilePicBorderUrl && (

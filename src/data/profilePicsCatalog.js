@@ -1,13 +1,13 @@
 import { catalogRarity } from "./economy";
 
-const profilePic = (id, name, theme, rarity = "normal") => ({
+const profilePic = (id, name, theme, rarity = "normal", imageId = id) => ({
   id,
   name,
   description: `Avatar ${name} para o perfil.`,
   category: "profile",
   theme,
   ...catalogRarity(rarity),
-  imageId: id,
+  imageId,
 });
 
 export const profilePicsCatalog = [
@@ -33,4 +33,8 @@ export const profilePicsCatalog = [
   profilePic("pic-game-1", "Viego", "game", "legendary"),
   profilePic("pic-game-2", "Jinx", "game", "legendary"),
   profilePic("pic-game-3", "Yasuo", "game", "legendary"),
+  profilePic("pic-itachi-1", "Itachi", "naruto", "legendary", "pic-itachi-1-legendary"),
+  profilePic("pic-miles", "Miles", "miranha", "epic", "pic-miles-epic"),
+  profilePic("pic-hinata", "Hinata", "haikyu", "epic", "pic-hinata-epic.gif"),
+  profilePic("pic-hinata-static", "Hinata 2", "haikyu", "epic", "pic-hinata-2-epic.gif"),
 ];

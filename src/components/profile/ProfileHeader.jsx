@@ -15,7 +15,7 @@ import {
   displayCardsCatalog,
 } from "../../data/displayCardsCatalog";
 import {
-  getAssetById,
+  getProfileAssetUrls,
   getCatalogAssetList,
   profileAssetFiles,
 } from "../../utils/profileAssets";
@@ -149,25 +149,11 @@ export default function ProfileHeader({
     ? draftProfile.selectedStatusIcon
     : profile.selectedStatusIcon || "✦";
 
-  const backgroundUrl = getAssetById(
-    backgroundImages,
+  const { backgroundUrl, profilePicUrl, profilePicBorderUrl } = getProfileAssetUrls({
     selectedBackgroundId,
-    "bg-default",
-  );
-
-  const profilePicUrl = getAssetById(
-    profilePicImages,
     selectedProfilePicId,
-    "pic-default",
-  );
-
-  const profilePicBorderUrl = selectedProfilePicBorderId
-    ? getAssetById(
-        profilePicBorderImages,
-        selectedProfilePicBorderId,
-        selectedProfilePicBorderId,
-      )
-    : "";
+    selectedProfilePicBorderId,
+  });
 
   const displayName = isEditing
     ? draftProfile.displayName
@@ -353,7 +339,7 @@ export default function ProfileHeader({
                   <img
                     src={profilePicUrl}
                     alt={displayName}
-                    className="h-full w-full object-cover"
+                    className="profile-pic-image"
                   />
 
                   {profilePicBorderUrl && (
@@ -805,7 +791,7 @@ function AssetPickerModal({
                       setConfirmedItemId("");
                     }}
                     className={`
-                      profile-asset-option relative h-24 overflow-hidden border transition active:scale-95
+                      profile-asset-option relative ${isProfilePic ? "aspect-square" : "h-24"} overflow-hidden border transition active:scale-95
                       ${selected ? "border-[#ff713f]" : "border-white/10"}
                     `}
                   >
@@ -831,7 +817,7 @@ function AssetPickerModal({
                       <img
                         src={item.src}
                         alt={item.name}
-                        className="h-full w-full object-cover"
+                        className={isProfilePic ? "profile-pic-image" : "h-full w-full object-cover"}
                       />
                     )}
 
@@ -879,7 +865,7 @@ function AssetPickerModal({
                 </button>
               </div>
 
-              <div className="profile-item-large-preview mb-4 h-64 overflow-hidden border border-white/10">
+              <div className={`profile-item-large-preview mb-4 overflow-hidden border border-white/10 ${isProfilePic ? "mx-auto aspect-square w-full max-w-[45vh]" : "h-64"}`}>
                 {isDisplayCard ? (
                   <div className={`display-card-preview ${previewItem.previewClassName} h-full w-full`}>
                     {previewItem.videoUrl && (
@@ -899,7 +885,7 @@ function AssetPickerModal({
                     className="h-full w-full object-cover"
                   />
                 ) : (
-                  <img src={previewItem.src} alt={previewItem.name} className={`h-full w-full ${isBackground ? "object-cover" : "object-contain"}`} />
+                  <img src={previewItem.src} alt={previewItem.name} className={isProfilePic ? "profile-pic-image" : "h-full w-full object-contain"} />
                 )}
               </div>
 
