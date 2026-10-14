@@ -53,6 +53,11 @@ altera senhas. Para desenvolvimento local, use as mesmas variáveis em
 
 ## Verificação
 
+O backend fixa `firebase-admin` em `13.6.0` para evitar a cadeia
+`jwks-rsa@4` / `jose@6`, que falhou na inicialização da função na Vercel com
+`ERR_REQUIRE_ESM`. O teste de inicialização desabilita `require(ESM)` para
+reproduzir essa restrição sem acessar contas reais.
+
 ```sh
 node --test tests/passwordRecovery.test.mjs
 ```

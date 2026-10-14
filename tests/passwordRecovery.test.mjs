@@ -1,7 +1,23 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { execFileSync } from "node:child_process";
+import process from "node:process";
 import { createPasswordRecovery, createRecoveryStore } from "../server/passwordRecovery.js";
 import handler from "../api/password-recovery.js";
+
+test("API starts without CommonJS require(ESM) support", () => {
+  const script = `
+    const { default: handler } = await import(${JSON.stringify(new URL("../api/password-recovery.js", import.meta.url).href)});
+    const response = {
+      setHeader() {},
+      end(body) {
+        if (this.statusCode !== 405 || !JSON.parse(body).error) process.exit(1);
+      },
+    };
+    await handler({ method: "GET", headers: {} }, response);
+  `;
+  execFileSync(process.execPath, ["--no-experimental-require-module", "--input-type=module", "-e", script], { timeout: 30_000 });
+});
 
 function harness() {
   let clock = 2_000_000;
