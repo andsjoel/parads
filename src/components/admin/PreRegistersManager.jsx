@@ -219,13 +219,13 @@ export default function PreRegistersManager() {
     try {
       setIsSaving(true);
       setCreateError("");
-      await updatePreRegister(editTarget.id, { role, sex });
+      await updatePreRegister(editTarget.id, { fullName, role, sex });
       await loadPreRegisters();
       setShowModal(false);
       setEditTarget(null);
     } catch (error) {
       console.error(error);
-      setCreateError("Não foi possível salvar as alterações.");
+      setCreateError(error.message || "Não foi possível salvar as alterações.");
     } finally {
       setIsSaving(false);
     }
@@ -500,7 +500,8 @@ export default function PreRegistersManager() {
             <div className="flex flex-col gap-3">
               <input
                 value={fullName}
-                disabled={Boolean(editTarget)}
+                disabled={isSaving}
+                required
                 onChange={(event) => setFullName(event.target.value)}
                 placeholder="Nome completo"
                 className="admin-input h-12 px-4 text-sm text-white outline-none placeholder:text-white/30"

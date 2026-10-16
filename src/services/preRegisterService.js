@@ -129,13 +129,15 @@ export async function deletePreRegister(id) {
   await batch.commit();
 }
 
-export async function updatePreRegister(id, { role, sex }) {
+export async function updatePreRegister(id, { fullName, role, sex }) {
+  const cleanName = typeof fullName === "string" ? fullName.trim() : undefined;
+  if (fullName !== undefined && !cleanName) throw new Error("Informe o nome completo.");
   if (!["admin", "member", "guest"].includes(role)
     || !["male", "female"].includes(sex)) throw new Error("Tipo ou sexo inválido.");
   const existingInvite = await getDoc(doc(db, COLLECTION_NAME, id));
   if (!existingInvite.exists()) throw new Error("Convite não encontrado.");
   if (role === "guest" && !existingInvite.data().claimed && !existingInvite.data().userId) {
-    return provisionExistingGuestInvite(id, existingInvite.data(), sex);
+    return provisionExistingGuestInvite(id, existingInvite.data(), sex, cleanName);
   }
   return runTransaction(db, async (transaction) => {
     const inviteRef = doc(db, COLLECTION_NAME, id);
@@ -145,15 +147,21 @@ export async function updatePreRegister(id, { role, sex }) {
     const userRef = uid ? doc(db, "users", uid) : null;
     const userSnap = userRef ? await transaction.get(userRef) : null;
     const changes = { role, type: role, sex, updatedAt: serverTimestamp() };
+    if (cleanName !== undefined) changes.fullName = cleanName;
     transaction.update(inviteRef, changes);
     if (userSnap?.exists()) {
-      transaction.update(userRef, changes);
-      transaction.set(doc(db, "public_profiles", uid), changes, { merge: true });
+      const userChanges = { ...changes };
+      const user = userSnap.data();
+      if (cleanName !== undefined && (!user.profile?.displayName || user.profile.displayName === user.fullName)) {
+        userChanges.profile = { ...user.profile, displayName: cleanName };
+      }
+      transaction.update(userRef, userChanges);
+      transaction.set(doc(db, "public_profiles", uid), userChanges, { merge: true });
     }
   });
 }
 
-async function provisionExistingGuestInvite(id, invite, sex) {
+async function provisionExistingGuestInvite(id, invite, sex, fullName) {
   const savedCode = await getDoc(doc(db, "invite_access_codes", id));
   const code = savedCode.data()?.code || generateAccessCode();
   const salt = savedCode.exists() ? invite.accessCodeSalt : generateAccessCodeSalt();
@@ -166,10 +174,11 @@ async function provisionExistingGuestInvite(id, invite, sex) {
       throw new Error("O convite foi alterado. Recarregue a lista.");
     }
     const initial = buildInitialUserDocuments({
-      fullName: current.data().fullName, phone: current.data().phone,
+      fullName: fullName ?? current.data().fullName, phone: current.data().phone,
       role: "guest", sex, authEmail: email, firstAccessPending: true,
     });
     transaction.update(inviteRef, {
+      fullName: initial.user.fullName,
       role: "guest", type: "guest", sex, userId: uid, pendingAuthEmail: email,
       accessCodeSalt: salt, accessCodeHash: hash, updatedAt: serverTimestamp(),
     });

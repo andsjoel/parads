@@ -143,3 +143,63 @@ test("regenerating a guest code also updates pending Auth access", async () => {
   assert.equal(authCalls[1].newCode, "123456");
   assert.equal(documents.get(`invite_access_codes/${invite.id}`).code, "123456");
 });
+
+test("editing a pending invitation updates its name but preserves the phone and access code", async () => {
+  const { invites, documents } = await createHarness();
+  const invite = await invites.createPreRegister({ fullName: "Old Name", phone: "61999999999", role: "member" });
+  const before = { ...documents.get(`pre_registered_users/${invite.id}`) };
+  await invites.updatePreRegister(invite.id, { fullName: "  New Name  ", role: "member", sex: "male" });
+  const after = documents.get(`pre_registered_users/${invite.id}`);
+  assert.equal(after.fullName, "New Name");
+  assert.equal(after.phone, before.phone);
+  assert.equal(after.accessCodeHash, before.accessCodeHash);
+  assert.equal(after.userId, before.userId);
+});
+
+test("editing a registered name syncs public data without touching a custom display name or progression", async () => {
+  const { invites, users, documents } = await createHarness();
+  const invite = await invites.createPreRegister({ fullName: "Old Name", phone: "61999999999", role: "guest" });
+  await users.createUserBaseData({ uid: invite.userId, preRegister: invite, username: "visitor", authEmail: invite.pendingAuthEmail });
+  const user = documents.get(`users/${invite.userId}`);
+  user.profile.displayName = "Custom";
+  user.progression.coins = 44;
+  const stats = structuredClone(documents.get(`user_stats/${invite.userId}`));
+  const inventory = structuredClone(documents.get(`user_inventory/${invite.userId}`));
+  await invites.updatePreRegister(invite.id, { fullName: "New Name", role: "member", sex: "female" });
+  const updated = documents.get(`users/${invite.userId}`);
+  assert.equal(updated.fullName, "New Name");
+  assert.equal(updated.profile.displayName, "Custom");
+  assert.equal(updated.username, "visitor");
+  assert.equal(updated.progression.coins, 44);
+  assert.equal(updated.phone, invite.phone);
+  assert.equal(documents.get(`public_profiles/${invite.userId}`).fullName, "New Name");
+  assert.deepEqual(documents.get(`user_stats/${invite.userId}`), stats);
+  assert.deepEqual(documents.get(`user_inventory/${invite.userId}`), inventory);
+});
+
+test("editing an uncustomized guest name also corrects its default display name", async () => {
+  const { invites, documents } = await createHarness();
+  const invite = await invites.createPreRegister({ fullName: "Old Name", phone: "61999999999", role: "guest" });
+  const oldProfile = documents.get(`users/${invite.userId}`).profile;
+  await invites.updatePreRegister(invite.id, { fullName: "New Name", role: "guest", sex: "male" });
+  const updated = documents.get(`users/${invite.userId}`);
+  assert.deepEqual(updated.profile, { ...oldProfile, displayName: "New Name" });
+  assert.equal(documents.get(`public_profiles/${invite.userId}`).profile.displayName, "New Name");
+});
+
+test("renaming while converting a pending invitation to guest uses the new name throughout", async () => {
+  const { invites, documents } = await createHarness();
+  const invite = await invites.createPreRegister({ fullName: "Old Name", phone: "61999999999", role: "member" });
+  await invites.updatePreRegister(invite.id, { fullName: "New Name", role: "guest", sex: "male" });
+  const updated = documents.get(`pre_registered_users/${invite.id}`);
+  assert.equal(updated.fullName, "New Name");
+  assert.equal(documents.get(`users/${updated.userId}`).fullName, "New Name");
+  assert.equal(documents.get(`public_profiles/${updated.userId}`).fullName, "New Name");
+});
+
+test("blank names are rejected before changing an invitation", async () => {
+  const { invites, documents } = await createHarness();
+  const invite = await invites.createPreRegister({ fullName: "Original", phone: "61999999999", role: "member" });
+  await assert.rejects(invites.updatePreRegister(invite.id, { fullName: "   ", role: "member", sex: "male" }));
+  assert.equal(documents.get(`pre_registered_users/${invite.id}`).fullName, "Original");
+});
