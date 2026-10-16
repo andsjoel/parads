@@ -90,7 +90,7 @@ export default function Shop() {
       setIsPurchasing(true);
       setPurchaseError("");
       const result = await purchaseProfileItem({ uid: user.id, type: categoryId, itemId: purchaseTarget.id });
-      const nextUser = { ...user, progression: { ...user.progression, coins: result.coins } };
+      const nextUser = { ...user, progression: { ...user.progression, coins: result.coins }, promotionalProgress: result.promotionalProgress || user.promotionalProgress };
       setInventory(result.inventory);
       setUser(nextUser);
       updateSessionData({ user: nextUser, inventory: result.inventory });

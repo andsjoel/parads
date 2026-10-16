@@ -206,11 +206,12 @@ export default function ProfileHeader({
         statusMessage: draftProfile.statusMessage.trim(),
       };
 
-      await updateUserProfile(user.id, nextProfile);
+      const result = await updateUserProfile(user.id, nextProfile);
 
       onUpdated?.({
         ...user,
         profile: nextProfile,
+        promotionalProgress: result.promotionalProgress,
       });
 
       setIsEditing(false);
@@ -279,6 +280,7 @@ export default function ProfileHeader({
     onUpdated?.({
       ...user,
       progression: { ...user.progression, coins: result.coins },
+      promotionalProgress: result.promotionalProgress || user.promotionalProgress,
     }, { inventory: result.inventory });
     return result;
   }

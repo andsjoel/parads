@@ -19,8 +19,10 @@ const statsConfig = [
   { key: "bestStreak", label: "Recorde", icon: Crown },
 ];
 
-export default function ProfileStats({ stats, missionsEnabled = false, isClaiming = false, onClaimRewards, immersive = false }) {
-  const [selectedStat, setSelectedStat] = useState(null);
+export default function ProfileStats({ stats, missionsEnabled = false, isClaiming = false, onClaimRewards, immersive = false, activeStat, onSelectStat }) {
+  const [internalSelectedStat, setInternalSelectedStat] = useState(null);
+  const selectedStat = activeStat === undefined ? internalSelectedStat : activeStat;
+  const setSelectedStat = onSelectStat || setInternalSelectedStat;
   const [showAllMissions, setShowAllMissions] = useState(false);
   const wrapperRef = useRef(null);
   const currentMissionRef = useRef(null);
@@ -62,7 +64,7 @@ export default function ProfileStats({ stats, missionsEnabled = false, isClaimin
       document.removeEventListener("mousedown", handleClickOutside);
       document.removeEventListener("touchstart", handleClickOutside);
     };
-  }, [showAllMissions]);
+  }, [showAllMissions, setSelectedStat]);
 
   useEffect(() => {
     if (!showAllMissions || !selectedStat || !currentMissionRef.current) return;

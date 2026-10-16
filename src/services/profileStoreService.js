@@ -5,6 +5,7 @@ import { profileBackgroundsCatalog } from "../data/profileBackgroundsCatalog";
 import { profilePicsCatalog } from "../data/profilePicsCatalog";
 import { profilePicBordersCatalog } from "../data/profilePicBordersCatalog";
 import { displayCardsCatalog } from "../data/displayCardsCatalog";
+import { qualifiesForPromotionalPurchase } from "../data/promotionalMissions";
 
 const storeSections = {
   background: { field: "backgrounds", catalog: profileBackgroundsCatalog },
@@ -52,9 +53,15 @@ export async function purchaseProfileItem({ uid, type, itemId }) {
       [section.field]: [...ownedItems, itemId],
     };
     const nextBalance = currentBalance - price;
+    const promotionalProgress = { ...(user.promotionalProgress || {}) };
+    if (qualifiesForPromotionalPurchase(item)) {
+      if (type === "profilePic") promotionalProgress.profilePicPurchased = true;
+      if (type === "background") promotionalProgress.backgroundPurchased = true;
+    }
 
     transaction.update(userRef, {
       "progression.coins": nextBalance,
+      promotionalProgress,
       updatedAt: serverTimestamp(),
     });
     transaction.set(publicProfileRef, {
@@ -66,6 +73,6 @@ export async function purchaseProfileItem({ uid, type, itemId }) {
       updatedAt: serverTimestamp(),
     });
 
-    return { coins: nextBalance, inventory: nextInventory };
+    return { coins: nextBalance, inventory: nextInventory, promotionalProgress };
   });
 }

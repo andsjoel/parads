@@ -1134,6 +1134,77 @@
   transform: scale(0.97);
 }
 
+.profile-promotions.profile-mission-panel {
+  overflow: visible;
+  margin-top: 48px;
+  transition: margin-top 280ms ease;
+}
+
+.profile-promotions__header {
+  position: relative;
+  height: 64px;
+  padding-right: clamp(136px, 40%, 156px);
+  transition: height 280ms ease, padding-right 280ms ease;
+}
+
+.profile-promotions__mascot {
+  position: absolute;
+  z-index: 2;
+  bottom: -7px;
+  right: 10px;
+  width: clamp(120px, 37%, 144px);
+  height: auto;
+  pointer-events: none;
+  user-select: none;
+  transition: opacity 180ms ease, transform 280ms ease, visibility 180ms;
+}
+
+.profile-promotions--collapsed.profile-mission-panel { margin-top: 12px; }
+
+.profile-promotions--collapsed .profile-promotions__header {
+  height: 44px;
+  padding-right: 16px;
+}
+
+.profile-promotions--collapsed .profile-promotions__mascot {
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(12px) scale(0.85);
+}
+
+.profile-promotions__body {
+  position: relative;
+  z-index: 3;
+  display: grid;
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transition: grid-template-rows 280ms ease, opacity 180ms ease;
+}
+
+.profile-promotions--collapsed .profile-promotions__body {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.profile-promotion-item {
+  border: 1px solid rgba(255, 139, 88, 0.18);
+  border-radius: 3px;
+  background: rgba(255, 139, 88, 0.055);
+}
+
+.profile-promotion-item--claimed {
+  border-color: rgba(184, 239, 195, 0.18);
+  background: rgba(92, 163, 107, 0.08);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .profile-promotions.profile-mission-panel,
+  .profile-promotions__header,
+  .profile-promotions__mascot,
+  .profile-promotions__body { transition: none; }
+}
+
 
 .app-bottom-nav {
   isolation: isolate;
@@ -3034,6 +3105,73 @@
 
 .feed-banner-copy {
   background: linear-gradient(90deg, rgba(20, 3, 8, 0.96), rgba(20, 3, 8, 0.72) 68%, transparent);
+}
+
+.feed-banner-carousel { flex-shrink: 0; }
+
+.feed-banner-slide {
+  position: absolute;
+  inset: 0;
+  visibility: hidden;
+  transform: translateX(100%);
+}
+
+.feed-banner-slide--active {
+  z-index: 1;
+  visibility: visible;
+  transform: translateX(0);
+}
+
+.feed-banner-slide--entering {
+  animation: feed-banner-enter 520ms cubic-bezier(0.22, 0.7, 0.25, 1) both;
+}
+
+.feed-banner-slide--outgoing {
+  visibility: visible;
+  animation: feed-banner-exit 520ms cubic-bezier(0.22, 0.7, 0.25, 1) both;
+}
+
+.feed-carousel-toggle {
+  border: 1px solid rgba(255, 139, 88, 0.4);
+  background: rgba(20, 3, 8, 0.65);
+  clip-path: polygon(12% 3%, 92% 0, 100% 18%, 95% 92%, 78% 100%, 3% 90%, 0 20%);
+}
+
+.feed-carousel-timer {
+  height: 6px;
+  overflow: hidden;
+  background: #3c111b;
+  clip-path: polygon(0 0, 21% 15%, 48% 0, 76% 15%, 100% 0, 100% 100%, 0 100%);
+}
+
+.feed-carousel-timer__fill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform: scaleX(0);
+  transform-origin: left;
+  background: repeating-linear-gradient(120deg, #ff542c 0 12px, #ff983e 12px 20px);
+  animation: feed-banner-countdown linear both;
+}
+
+@keyframes feed-banner-countdown {
+  to { transform: scaleX(1); }
+}
+
+@keyframes feed-banner-enter {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes feed-banner-exit {
+  from { transform: translateX(0); }
+  to { transform: translateX(-100%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feed-banner-slide--entering,
+  .feed-banner-slide--outgoing { animation: none; }
+  .feed-carousel-timer__fill { animation: none; transform: scaleX(1); }
 }
 
 .feed-report-card--wins {

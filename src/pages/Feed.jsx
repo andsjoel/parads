@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { BarChart3, CalendarDays, ClipboardList, Gamepad2, MessageCircle, Palette, Store, Target, Trophy, User } from "lucide-react";
 import { GiVolleyballBall } from "react-icons/gi";
 
-import feedBanner from "../assets/app-backgrounds/bg-banner-feed.png";
+import FeedBannerCarousel from "../components/FeedBannerCarousel";
 import generalBackground from "../assets/app-backgrounds/bg-geral.png";
 import OrbitLoader from "../components/OrbitLoader";
 import {
@@ -140,19 +140,7 @@ export default function Feed() {
       style={{ backgroundImage: `url(${generalBackground})` }}
     >
       <section className="feed-content mx-auto flex w-full max-w-[420px] flex-col gap-4">
-        <div className="feed-banner relative aspect-[3/1] w-full overflow-hidden">
-          <img
-            src={feedBanner}
-            alt=""
-            className="absolute inset-0 h-full w-full object-cover"
-          />
-          <div className="feed-banner-copy absolute inset-y-0 left-0 z-[1] flex w-[64%] flex-col justify-center px-5 py-3">
-            <h1 className="font-idv-title text-xl leading-none text-[#fffaf0]">App em construção</h1>
-            <p className="mt-2 text-[10px] font-bold leading-snug text-white/70">
-              Podem surgir problemas e erros. Por favor, reportem.
-            </p>
-          </div>
-        </div>
+        <FeedBannerCarousel />
         <div className="feed-posts space-y-4 px-5">
           {loading && <div className="flex justify-center py-10"><OrbitLoader size={30} /></div>}
           {!loading && posts.length === 0 && (

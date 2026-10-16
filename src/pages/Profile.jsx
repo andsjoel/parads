@@ -5,11 +5,15 @@ import generalBackground from "../assets/app-backgrounds/bg-geral.png";
 import ProfileHeader from "../components/profile/ProfileHeader";
 import ProfileStats from "../components/profile/ProfileStats";
 import { claimProfileMissionRewards } from "../services/profileMissionService";
+import PromotionalMissions from "../components/profile/PromotionalMissions";
+import { claimPromotionalMission } from "../services/promotionalMissionService";
 
 export default function Profile() {
   const { userData: authUserData, sessionData, updateSessionData, loadingAuth } = useAuth();
   const [userData, setUserData] = useState(authUserData);
   const [isClaimingMissions, setIsClaimingMissions] = useState(false);
+  const [selectedStat, setSelectedStat] = useState(null);
+  const [isClaimingPromotion, setIsClaimingPromotion] = useState(false);
 
   useEffect(() => {
     setUserData(authUserData);
@@ -36,6 +40,17 @@ export default function Profile() {
     }
   }
 
+  async function handleClaimPromotion(missionId) {
+    if (!userData?.id || isClaimingPromotion) return;
+    try {
+      setIsClaimingPromotion(true);
+      const result = await claimPromotionalMission(userData.id, missionId);
+      handleUserUpdated({ ...userData, progression: { ...userData.progression, coins: result.coins } }, { stats: result.stats });
+    } finally {
+      setIsClaimingPromotion(false);
+    }
+  }
+
   if (loadingAuth || !userData) {
     return (
       <main className="profile-page flex h-[100dvh] items-center justify-center overflow-hidden px-5 pb-20 pt-3">
@@ -46,22 +61,35 @@ export default function Profile() {
 
   return (
     <main
-      className="profile-page h-[100dvh] overflow-hidden pb-[76px] text-white"
+      className="profile-page min-h-[100dvh] pb-[calc(90px+env(safe-area-inset-bottom))] text-white"
       style={{ backgroundImage: `url(${generalBackground})` }}
     >
-      <section className="mx-auto flex h-full w-full max-w-[520px] flex-col overflow-hidden">
-        <ProfileHeader
-          user={userData}
-          inventory={sessionData?.inventory}
-          onUpdated={handleUserUpdated}
-          compact
-        />
+      <section className="mx-auto flex w-full max-w-[520px] flex-col">
+        <div className="shrink-0">
+          <ProfileHeader
+            user={userData}
+            inventory={sessionData?.inventory}
+            onUpdated={handleUserUpdated}
+            compact
+          />
+        </div>
 
         <ProfileStats
           stats={sessionData?.stats}
           missionsEnabled
           isClaiming={isClaimingMissions}
           onClaimRewards={handleClaimMissionRewards}
+          activeStat={selectedStat}
+          onSelectStat={setSelectedStat}
+        />
+        <PromotionalMissions
+          user={userData}
+          inventory={sessionData?.inventory || {}}
+          stats={sessionData?.stats || {}}
+          collapsed={Boolean(selectedStat)}
+          onExpand={() => setSelectedStat(null)}
+          isClaiming={isClaimingPromotion}
+          onClaim={handleClaimPromotion}
         />
       </section>
     </main>
