@@ -60,7 +60,8 @@ test("legacy guests are separated without mutating the list or losing setter fla
   assert.deepEqual(groups.guests.map((p) => p.id), ["gs", "gp"]);
   assert.equal(groups.guests[0].isSetter, true);
   assert.deepEqual(legacy, copy);
-  assert.equal(getPresenceLimit(legacy, "guest"), 6);
+  assert.equal(getPresenceLimit(legacy, "guest"), null);
+  assert.equal(getPresenceLimit({ guestsLimit: 6 }, "guest"), null);
   assert.deepEqual(getPresenceGroups(null), { setters: [], players: [], guests: [] });
 });
 
@@ -110,7 +111,7 @@ test("admin routes guests to their own group, allows overbooking and rejects dup
   assert.equal(list().guests.length, 7);
   assert.equal(list().setters.length, 0);
   assert.equal(list().guests[6].isSetter, true);
-  assert.equal(getPresenceLimit(list(), "guest"), 6);
+  assert.equal(getPresenceLimit(list(), "guest"), null);
   await assert.rejects(api.adminAddVolleyListParticipant({ listId: "day", group: "player", userData: { id: "guest" } }));
 });
 

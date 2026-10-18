@@ -770,7 +770,6 @@ export async function createVolleyList({ date, adminUser }) {
     status: "open",
     settersLimit: 4,
     playersLimit: 26,
-    guestsLimit: 6,
     setters: [],
     players: [],
     guests: [],

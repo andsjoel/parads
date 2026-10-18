@@ -62,7 +62,7 @@ function PresenceGroup({
           <div>
             <h2 className="text-sm font-black text-[#fffaf0]">{title}</h2>
             <p className="text-xs text-[#9aa89f]">
-              {people.length}/{Math.max(limit, people.length)}
+              {limit === null ? people.length : `${people.length}/${Math.max(limit, people.length)}`}
             </p>
           </div>
         </div>

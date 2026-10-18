@@ -241,7 +241,7 @@ function CurrentListModal({
           <div>
             <h2 className="font-idv-title text-2xl">Lista atual</h2>
             <p className="mt-1 text-sm font-bold text-app-primary">
-              {formatDate(list.date)} · {Object.values(presence).flat().length}/{groups.reduce((total, group) => total + Math.max(group.limit, group.people.length), 0)}
+              {formatDate(list.date)} · {Object.values(presence).flat().length} na lista
             </p>
           </div>
           <button type="button" onClick={onClose} className="profile-modal-close flex h-9 w-9 items-center justify-center text-white/70" aria-label="Fechar lista">
@@ -260,7 +260,7 @@ function CurrentListModal({
                   <Icon size={16} className="text-app-primary" />
                   <h3 className="text-sm font-black text-[#fffaf0]">{title}</h3>
                 </div>
-                <span className="text-xs font-black text-app-primary">{people.length}/{Math.max(limit, people.length)}</span>
+                <span className="text-xs font-black text-app-primary">{limit === null ? people.length : `${people.length}/${Math.max(limit, people.length)}`}</span>
               </div>
 
               {variant === "guests" && getGuestRequests(list).length > 0 && (
@@ -286,7 +286,10 @@ function CurrentListModal({
               )}
 
               <div className="divide-y divide-white/8 border border-white/10 bg-black/15">
-                {Array.from({ length: Math.max(limit, people.length) }).map((_, index) => {
+                {variant === "guests" && !people.length && (
+                  <p className="px-3 py-4 text-center text-xs text-white/50">Nenhum convidado foi adicionado.</p>
+                )}
+                {Array.from({ length: limit === null ? people.length : Math.max(limit, people.length) }).map((_, index) => {
                   const person = people[index];
                   const realName = person ? usersById[person.id]?.fullName?.trim() : "";
 

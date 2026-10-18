@@ -1,4 +1,4 @@
-export const PRESENCE_LIMITS = { setter: 4, player: 26, guest: 6 };
+export const PRESENCE_LIMITS = { setter: 4, player: 26, guest: null };
 export const PRESENCE_KEYS = { setter: "setters", player: "players", guest: "guests" };
 
 export function isGuestParticipant(person) {
@@ -6,6 +6,7 @@ export function isGuestParticipant(person) {
 }
 
 export function getPresenceLimit(list, group) {
+  if (group === "guest") return null;
   const key = `${PRESENCE_KEYS[group]}Limit`;
   const configured = list?.[key];
   return Number.isInteger(configured) && configured >= 0 ? configured : PRESENCE_LIMITS[group];
