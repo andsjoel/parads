@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   CalendarPlus,
+  Check,
   Crown,
   Pencil,
   Plus,
@@ -25,8 +26,10 @@ import CourtTeamsFrame from "../components/matches/CourtTeamsFrame";
 import { useAuth } from "../contexts/AuthContext";
 import generalBackground from "../assets/app-backgrounds/bg-geral.png";
 import { buildTeamDisplaySlots } from "../utils/teamSlots";
+import { getGuestRequests, getPresenceGroups, getPresenceLimit, isGuestParticipant } from "../utils/presenceGroups";
 import {
   addVolleyMatchPlayer,
+  acceptVolleyListGuest,
   adminAddVolleyListParticipant,
   adminRemoveVolleyListParticipant,
   createVolleyList,
@@ -221,12 +224,14 @@ function CurrentListModal({
   selectedUserId,
   onSelect,
   onRemove,
+  onAcceptGuest,
+  busyAction,
 }) {
-  const frozenSetters = list.confirmedSetters || list.setters || [];
-  const frozenPlayers = list.confirmedPlayers || list.players || [];
+  const presence = getPresenceGroups(list);
   const groups = [
-    { title: "Levantadores", icon: Crown, people: frozenSetters, limit: 4 },
-    { title: "Jogadores", icon: Volleyball, people: frozenPlayers, limit: 26 },
+    { title: "Levantadores", icon: Crown, people: presence.setters, limit: getPresenceLimit(list, "setter"), variant: "setters" },
+    { title: "Jogadores", icon: Volleyball, people: presence.players, limit: getPresenceLimit(list, "player"), variant: "players" },
+    { title: "Convidados", icon: Users, people: presence.guests, limit: getPresenceLimit(list, "guest"), variant: "guests" },
   ];
 
   return (
@@ -236,7 +241,7 @@ function CurrentListModal({
           <div>
             <h2 className="font-idv-title text-2xl">Lista atual</h2>
             <p className="mt-1 text-sm font-bold text-app-primary">
-              {formatDate(list.date)} · {frozenSetters.length + frozenPlayers.length}/30
+              {formatDate(list.date)} · {Object.values(presence).flat().length}/{groups.reduce((total, group) => total + Math.max(group.limit, group.people.length), 0)}
             </p>
           </div>
           <button type="button" onClick={onClose} className="profile-modal-close flex h-9 w-9 items-center justify-center text-white/70" aria-label="Fechar lista">
@@ -245,21 +250,43 @@ function CurrentListModal({
         </div>}
 
         <div className={embedded ? "space-y-4" : "profile-edit-content min-h-0 flex-1 space-y-4 overflow-y-auto pr-1"}>
-          {groups.map(({ title, icon: Icon, people, limit }) => (
+          {groups.map(({ title, icon: Icon, people, limit, variant }) => (
             <section
               key={title}
-              className={`match-panel p-3 ${title === "Levantadores" ? "match-panel--setters" : "match-panel--players"}`}
+              className={`match-panel match-panel--${variant} p-3`}
             >
               <div className="mb-2 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Icon size={16} className="text-app-primary" />
                   <h3 className="text-sm font-black text-[#fffaf0]">{title}</h3>
                 </div>
-                <span className="text-xs font-black text-app-primary">{people.length}/{limit}</span>
+                <span className="text-xs font-black text-app-primary">{people.length}/{Math.max(limit, people.length)}</span>
               </div>
 
+              {variant === "guests" && getGuestRequests(list).length > 0 && (
+                <div className="mb-3 space-y-2 border-b border-white/10 pb-3">
+                  <p className="text-xs font-bold text-[#4fcfe6]">Solicitações</p>
+                  {getGuestRequests(list).map((person) => (
+                    <div key={person.id} className="flex min-h-11 items-center gap-3 bg-black/15 px-3 py-2">
+                      <span className="min-w-0 flex-1 truncate text-sm font-bold text-[#fffaf0]">
+                        {usersById[person.id]?.fullName || person.name || "Convidado"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={(event) => { event.stopPropagation(); onAcceptGuest(person); }}
+                        disabled={Boolean(busyAction)}
+                        className="match-action match-action--active flex min-h-11 shrink-0 items-center gap-1 px-3 text-xs font-black disabled:opacity-50"
+                      >
+                        <Check size={16} />
+                        {busyAction === `accept-guest-${person.id}` ? "Aceitando..." : "Aceitar"}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <div className="divide-y divide-white/8 border border-white/10 bg-black/15">
-                {Array.from({ length: limit }).map((_, index) => {
+                {Array.from({ length: Math.max(limit, people.length) }).map((_, index) => {
                   const person = people[index];
                   const realName = person ? usersById[person.id]?.fullName?.trim() : "";
 
@@ -445,8 +472,8 @@ export default function AdminVolleyList({ mode = "list" }) {
   );
 
   const confirmedPeople = useMemo(
-    () => [...(list?.setters || []), ...(list?.players || [])],
-    [list?.players, list?.setters],
+    () => Object.values(getPresenceGroups(list)).flat(),
+    [list],
   );
 
   const confirmedIds = new Set(confirmedPeople.map((person) => person.id));
@@ -494,7 +521,7 @@ export default function AdminVolleyList({ mode = "list" }) {
   const returnTeam = list?.returnTeam || null;
   const isOpen = list?.status === "open";
   const isInProgress = list?.status === "in_progress";
-  const totalConfirmed = (list?.setters || []).length + (list?.players || []).length;
+  const totalConfirmed = confirmedPeople.length;
   const totalPresent = activeMatchPlayers.length;
   const canRedo = (list?.redoHistory || []).length > 0;
   const usersById = useMemo(
@@ -881,6 +908,9 @@ export default function AdminVolleyList({ mode = "list" }) {
                     selectedUserId={selectedListPerson?.id}
                     onSelect={handleSelectListPerson}
                     onRemove={handleRemoveListPerson}
+                    busyAction={busyAction}
+                    onAcceptGuest={(person) => runAdminAction(`accept-guest-${person.id}`, () =>
+                      acceptVolleyListGuest({ listId: list.id, userId: person.id }))}
                   />
                 )}
 
@@ -1030,7 +1060,8 @@ export default function AdminVolleyList({ mode = "list" }) {
                               type="button"
                               onClick={() => handleAddUser(
                                 user,
-                                (list.setters || []).some((item) => item.id === user.id),
+                                getPresenceGroups(list).setters.some((item) => item.id === user.id)
+                                || confirmedPeople.some((item) => item.id === user.id && item.isSetter),
                               )}
                               className="flex h-10 w-full items-center justify-between px-3 text-sm font-black text-[#fffaf0] active:scale-[0.98]"
                             >
@@ -1226,6 +1257,7 @@ export default function AdminVolleyList({ mode = "list" }) {
                   jogador
                 </button>
               </div>
+              {isGuestParticipant(manualUser) && <p className="mt-3 text-xs font-bold text-[#9aa89f]">Grupo: Convidados</p>}
             </div>
 
             <div className="mt-4 grid shrink-0 grid-cols-2 gap-2">

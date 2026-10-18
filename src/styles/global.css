@@ -2201,7 +2201,8 @@
   box-shadow: 0 14px 40px rgba(0, 0, 0, 0.27), 0 0 24px rgba(255, 148, 46, 0.06);
 }
 
-.match-panel--players {
+.match-panel--players,
+.match-panel--guests {
   position: relative;
   isolation: isolate;
   padding-bottom: 1.75rem;
@@ -2213,20 +2214,24 @@
 .match-panel--setters::before,
 .match-panel--setters::after,
 .match-panel--players::before,
-.match-panel--players::after {
+.match-panel--players::after,
+.match-panel--guests::before,
+.match-panel--guests::after {
   position: absolute;
   content: "";
   clip-path: polygon(2% 1%, 97% 0, 100% 7%, 98% 93%, 94% 100%, 3% 98%, 0 90%, 1% 7%);
 }
 
 .match-panel--setters::before,
-.match-panel--players::before {
+.match-panel--players::before,
+.match-panel--guests::before {
   z-index: -2;
   inset: 0;
 }
 
 .match-panel--setters::after,
-.match-panel--players::after {
+.match-panel--players::after,
+.match-panel--guests::after {
   z-index: -1;
   inset: 1.5px;
 }
@@ -2249,6 +2254,15 @@
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.06), transparent 42%),
     rgba(31, 7, 18, 0.96);
+}
+
+.match-panel--guests::before { background: rgba(79, 207, 230, 0.85); }
+
+.match-panel--guests::after { background: rgba(8, 25, 31, 0.96); }
+
+.match-panel--guests > div:first-child > div:first-child > div:first-child {
+  background: rgba(79, 207, 230, 0.12);
+  color: #65d6eb;
 }
 
 .match-panel--setters > div:first-child > div:first-child > div:first-child {

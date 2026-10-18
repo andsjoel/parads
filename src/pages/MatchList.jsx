@@ -13,6 +13,7 @@ import { useAuth } from "../contexts/AuthContext";
 import OrbitLoader from "../components/OrbitLoader";
 import CourtTeamsFrame from "../components/matches/CourtTeamsFrame";
 import { buildTeamDisplaySlots } from "../utils/teamSlots";
+import { getGuestRequests, getPresenceGroups, getPresenceLimit, isGuestParticipant, PRESENCE_KEYS } from "../utils/presenceGroups";
 import generalBackground from "../assets/app-backgrounds/bg-geral.png";
 import waitingListBackground from "../assets/app-backgrounds/bg-waiting-list.png";
 import waitingMatchBackground from "../assets/app-backgrounds/bg-waiting-match.png";
@@ -24,6 +25,7 @@ import { getPublicProfileBundles } from "../services/publicProfileService";
 import {
   joinVolleyList,
   leaveVolleyList,
+  requestVolleyListGuest,
   subscribeActiveVolleyList,
 } from "../services/volleyListService";
 
@@ -60,7 +62,7 @@ function PresenceGroup({
           <div>
             <h2 className="text-sm font-black text-[#fffaf0]">{title}</h2>
             <p className="text-xs text-[#9aa89f]">
-              {people.length}/{limit}
+              {people.length}/{Math.max(limit, people.length)}
             </p>
           </div>
         </div>
@@ -105,17 +107,19 @@ function PresenceGroup({
 }
 
 function FrozenPresenceModal({ list, profilesById, onOpenProfile, onClose }) {
+  const presence = getPresenceGroups(list);
   const groups = [
     {
       title: "Levantadores",
       icon: Crown,
-      people: list.confirmedSetters || list.setters || [],
+      people: presence.setters,
     },
     {
       title: "Jogadores",
       icon: Volleyball,
-      people: list.confirmedPlayers || list.players || [],
+      people: presence.players,
     },
+    { title: "Convidados", icon: Users, people: presence.guests },
   ];
 
   return (
@@ -335,6 +339,7 @@ export default function MatchList({ mode = "matches" }) {
   const [selectedPerson, setSelectedPerson] = useState(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
   const [showFrozenList, setShowFrozenList] = useState(false);
+  const presence = useMemo(() => getPresenceGroups(list), [list]);
 
   useEffect(() => {
     setIsLoading(true);
@@ -359,8 +364,7 @@ export default function MatchList({ mode = "matches" }) {
   useEffect(() => {
     async function loadProfiles() {
       const ids = [
-        ...(list?.setters || []).map((person) => person.id),
-        ...(list?.players || []).map((person) => person.id),
+        ...Object.values(presence).flat().map((person) => person.id),
         ...(list?.matchPlayers || []).map((person) => person.userId),
       ].filter(Boolean);
       const mockProfiles = list?.mockProfiles || {};
@@ -392,13 +396,11 @@ export default function MatchList({ mode = "matches" }) {
     }
 
     loadProfiles();
-  }, [list, sessionData?.inventory, sessionData?.stats, userData]);
+  }, [list, presence, sessionData?.inventory, sessionData?.stats, userData]);
 
   const isListOpen = list?.status === "open";
   const isInProgress = list?.status === "in_progress";
   const isWaitingForMatch = !isPresenceMode && !isInProgress;
-  const setters = list?.setters || [];
-  const players = list?.players || [];
   const teams = list?.teams || [];
   const playersByEntryId = useMemo(() => {
     return (list?.matchPlayers || []).reduce((result, player) => {
@@ -412,12 +414,15 @@ export default function MatchList({ mode = "matches" }) {
 
   const userGroup = useMemo(() => {
     if (!list || !userData?.id) return null;
-    if ((list.setters || []).some((person) => person.id === userData.id)) return "setter";
-    if ((list.players || []).some((person) => person.id === userData.id)) return "player";
+    for (const [group, key] of Object.entries(PRESENCE_KEYS)) {
+      if (presence[key].some((person) => person.id === userData.id)) return group;
+    }
     return null;
-  }, [list, userData?.id]);
+  }, [list, presence, userData?.id]);
 
   const canChangeList = isMember && isListOpen;
+  const isGuest = isGuestParticipant(userData);
+  const hasGuestRequest = getGuestRequests(list).some((person) => person.id === userData?.id);
 
   async function runListAction(actionName, action) {
     try {
@@ -529,79 +534,34 @@ export default function MatchList({ mode = "matches" }) {
           </p>
         )}
 
-        {isPresenceMode && list && isListOpen && (
-          <>
+        {isPresenceMode && list && (isListOpen || isInProgress) && [
+          { group: "setter", title: "Levantadores", icon: Crown, emptyText: "Nenhum levantador confirmou ainda." },
+          { group: "player", title: "Jogadores", icon: Volleyball, emptyText: "Nenhum jogador confirmou ainda." },
+          { group: "guest", title: "Convidados", icon: Users, emptyText: "Nenhum convidado foi adicionado." },
+        ].map(({ group, title, icon, emptyText }) => {
+          const people = presence[PRESENCE_KEYS[group]];
+          const limit = getPresenceLimit(list, group);
+          const isGuestGroup = group === "guest";
+          return (
             <PresenceGroup
-              title="Levantadores"
-              icon={Crown}
-              limit={list.settersLimit}
-              people={setters}
-              emptyText="Nenhum levantador confirmou ainda."
-              actionLabel={userGroup === "setter" ? "Sair" : "Entrar"}
-              disabledAction={
-                !canChangeList ||
-                (userGroup !== "setter" && setters.length >= list.settersLimit)
-              }
-              isBusy={busyAction === "join-setter" || busyAction === "leave"}
+              key={group}
+              title={title}
+              icon={icon}
+              limit={limit}
+              people={people}
+              emptyText={emptyText}
+              actionLabel={isGuestGroup && userGroup === "guest" ? "Confirmado" : isGuestGroup && hasGuestRequest ? "Aguardando" : !isListOpen ? "fechada" : isGuestGroup ? isGuest ? "Solicitar" : "Somente ADM" : userGroup === group ? "Sair" : "Entrar"}
+              disabledAction={isGuestGroup ? !isGuest || !isListOpen || hasGuestRequest || Boolean(userGroup) : !canChangeList || (userGroup !== group && people.length >= limit)}
+              isBusy={busyAction === `join-${group}` || (isGuestGroup && busyAction === "request-guest") || (busyAction === "leave" && userGroup === group)}
               profilesById={profilesById}
               onOpenProfile={handleOpenProfile}
-              variant="setters"
-              onAction={() =>
-                userGroup === "setter" ? handleLeave() : handleJoin("setter")
-              }
+              variant={PRESENCE_KEYS[group]}
+              onAction={() => isGuestGroup
+                ? runListAction("request-guest", () => requestVolleyListGuest({ listId: list.id }))
+                : userGroup === group ? handleLeave() : handleJoin(group)}
             />
-
-            <PresenceGroup
-              title="Jogadores"
-              icon={Volleyball}
-              limit={list.playersLimit}
-              people={players}
-              emptyText="Nenhum jogador confirmou ainda."
-              actionLabel={userGroup === "player" ? "Sair" : "Entrar"}
-              disabledAction={
-                !canChangeList ||
-                (userGroup !== "player" && players.length >= list.playersLimit)
-              }
-              isBusy={busyAction === "join-player" || busyAction === "leave"}
-              profilesById={profilesById}
-              onOpenProfile={handleOpenProfile}
-              variant="players"
-              onAction={() =>
-                userGroup === "player" ? handleLeave() : handleJoin("player")
-              }
-            />
-
-          </>
-        )}
-
-        {isPresenceMode && list && isInProgress && (
-          <>
-            <PresenceGroup
-              title="Levantadores"
-              icon={Crown}
-              limit={list.settersLimit}
-              people={list.confirmedSetters || list.setters || []}
-              emptyText="Nenhum levantador confirmou."
-              actionLabel="fechada"
-              disabledAction
-              profilesById={profilesById}
-              onOpenProfile={handleOpenProfile}
-              variant="setters"
-            />
-            <PresenceGroup
-              title="Jogadores"
-              icon={Volleyball}
-              limit={list.playersLimit}
-              people={list.confirmedPlayers || list.players || []}
-              emptyText="Nenhum jogador confirmou."
-              actionLabel="fechada"
-              disabledAction
-              profilesById={profilesById}
-              onOpenProfile={handleOpenProfile}
-              variant="players"
-            />
-          </>
-        )}
+          );
+        })}
 
         {!isPresenceMode && list && isInProgress && (
           <>

@@ -14,7 +14,8 @@ import {
   writeBatch,
 } from "firebase/firestore";
 
-import { db } from "../firebase/firebase";
+import { auth, db } from "../firebase/firebase";
+import { getPresenceGroups, getPresenceLimit, isGuestParticipant, presenceUpdate, PRESENCE_KEYS } from "../utils/presenceGroups";
 import { sequenceMilestones } from "../data/profileMissions";
 import { profilePicsCatalog } from "../data/profilePicsCatalog";
 import { profilePicBordersCatalog } from "../data/profilePicBordersCatalog";
@@ -94,7 +95,7 @@ function buildParticipant(userData) {
     id: userData.id,
     name: userData.profile?.displayName || userData.fullName || userData.username,
     username: userData.username,
-    role: userData.role || "member",
+    role: userData.role || userData.type || "member",
     sex: userData.sex || "male",
   };
 }
@@ -243,24 +244,39 @@ async function syncPersistedAttendance({ transaction, fromUserIds, toUserIds }) 
 }
 
 function getGroupKey(group) {
-  if (group === "setter") return "setters";
-  if (group === "player") return "players";
+  if (Object.hasOwn(PRESENCE_KEYS, group)) return PRESENCE_KEYS[group];
 
   throw new Error("Grupo invalido.");
 }
 
 function removeParticipantFromGroups(list, userId) {
+  const groups = getPresenceGroups(list);
   return {
-    setters: (list.setters || []).filter((person) => person.id !== userId),
-    players: (list.players || []).filter((person) => person.id !== userId),
+    setters: groups.setters.filter((person) => person.id !== userId),
+    players: groups.players.filter((person) => person.id !== userId),
+    guests: groups.guests.filter((person) => person.id !== userId),
   };
 }
 
 function getParticipantGroup(list, userId) {
-  if ((list.setters || []).some((person) => person.id === userId)) return "setter";
-  if ((list.players || []).some((person) => person.id === userId)) return "player";
+  const groups = getPresenceGroups(list);
+  for (const [group, key] of Object.entries(PRESENCE_KEYS)) {
+    if (groups[key].some((person) => person.id === userId)) return group;
+  }
 
   return null;
+}
+
+async function requirePresenceActor(transaction, adminOnly = false, userId, allowGuest = false) {
+  const uid = auth.currentUser?.uid;
+  if (!uid || (userId && uid !== userId)) throw new Error("Entre novamente para operar a lista.");
+  const userSnap = await transaction.get(doc(db, "users", uid));
+  const user = userSnap.data();
+  if (!userSnap.exists() || (adminOnly && user.role !== "admin")) {
+    throw new Error("Apenas administradores podem gerenciar a lista.");
+  }
+  if (!adminOnly && !allowGuest && isGuestParticipant(user)) throw new Error("Convidados só podem ser adicionados pelo admin.");
+  return { ...user, id: uid };
 }
 
 function activePlayers(list) {
@@ -640,8 +656,7 @@ function summarize(list) {
   const guests = players.filter((player) => player.kind === "guest");
   const ghosts = players.filter((player) => player.kind === "ghost");
   const noShows = [
-    ...(list.setters || []),
-    ...(list.players || []),
+    ...Object.values(getPresenceGroups(list)).flat(),
   ].filter(
     (person) =>
       !players.some((player) => player.userId && player.userId === person.id),
@@ -755,9 +770,11 @@ export async function createVolleyList({ date, adminUser }) {
     status: "open",
     settersLimit: 4,
     playersLimit: 26,
+    guestsLimit: 6,
     setters: [],
     players: [],
     guests: [],
+    guestRequests: [],
     matchPlayers: [],
     teams: [],
     teamsFormedAt: null,
@@ -794,8 +811,10 @@ export async function createVolleyList({ date, adminUser }) {
 export async function joinVolleyList({ listId, group, userData }) {
   const listRef = doc(db, COLLECTION_NAME, listId);
   const groupKey = getGroupKey(group);
+  if (group === "guest") throw new Error("Convidados só podem ser adicionados pelo admin.");
 
   await runTransaction(db, async (transaction) => {
+    const actor = await requirePresenceActor(transaction, false, userData.id);
     const listSnap = await transaction.get(listRef);
 
     if (!listSnap.exists()) throw new Error("Lista nao encontrada.");
@@ -810,14 +829,13 @@ export async function joinVolleyList({ listId, group, userData }) {
 
     const nextGroups = removeParticipantFromGroups(list, userData.id);
     const currentGroup = nextGroups[groupKey] || [];
-    const limitKey = group === "setter" ? "settersLimit" : "playersLimit";
-    const groupLimit = list[limitKey] || 0;
+    const groupLimit = getPresenceLimit(list, group);
 
     if (currentGroup.length >= groupLimit) throw new Error("Esse grupo ja esta cheio.");
 
     transaction.update(listRef, {
       ...nextGroups,
-      [groupKey]: [...currentGroup, buildParticipant(userData)],
+      [groupKey]: [...currentGroup, buildParticipant(actor)],
       updatedAt: serverTimestamp(),
     });
   });
@@ -827,11 +845,13 @@ export async function leaveVolleyList({ listId, userId }) {
   const listRef = doc(db, COLLECTION_NAME, listId);
 
   await runTransaction(db, async (transaction) => {
+    await requirePresenceActor(transaction, false, userId);
     const listSnap = await transaction.get(listRef);
 
     if (!listSnap.exists()) throw new Error("Lista nao encontrada.");
 
     const list = listSnap.data();
+    if (list.status !== "open") throw new Error("A lista não está aberta.");
     const nextGroups = removeParticipantFromGroups(list, userId);
 
     transaction.update(listRef, {
@@ -845,39 +865,59 @@ export async function removeVolleyListParticipant({ listId, userId }) {
   return leaveVolleyList({ listId, userId });
 }
 
-export async function adminAddVolleyListParticipant({ listId, group, userData }) {
+export async function requestVolleyListGuest({ listId }) {
   const listRef = doc(db, COLLECTION_NAME, listId);
-  const groupKey = getGroupKey(group);
+  await runTransaction(db, async (transaction) => {
+    const actor = await requirePresenceActor(transaction, false, undefined, true);
+    if (!isGuestParticipant(actor)) throw new Error("A solicitação é exclusiva para convidados.");
+    const listSnap = await transaction.get(listRef);
+    if (!listSnap.exists()) throw new Error("Lista não encontrada.");
+    const list = listSnap.data();
+    if (list.status !== "open") throw new Error("A lista não está aberta.");
+    if (getParticipantGroup(list, actor.id)) throw new Error("Você já está na lista.");
+    const requests = list.guestRequests || [];
+    if (requests.some((person) => person.id === actor.id)) return;
+    transaction.update(listRef, {
+      guestRequests: [...requests, buildParticipant(actor)],
+      updatedAt: serverTimestamp(),
+    });
+  });
+}
+
+export async function acceptVolleyListGuest({ listId, userId }) {
+  return adminAddVolleyListParticipant({ listId, group: "guest", userData: { id: userId }, requireGuestRequest: true });
+}
+
+export async function adminAddVolleyListParticipant({ listId, group, userData, requireGuestRequest = false }) {
+  const listRef = doc(db, COLLECTION_NAME, listId);
+  getGroupKey(group);
 
   await runTransaction(db, async (transaction) => {
+    await requirePresenceActor(transaction, true);
     const listSnap = await transaction.get(listRef);
     if (!listSnap.exists()) throw new Error("Lista nao encontrada.");
 
     const list = listSnap.data();
-    const setters = list.confirmedSetters || list.setters || [];
-    const players = list.confirmedPlayers || list.players || [];
-    if ([...setters, ...players].some((person) => person.id === userData.id)) {
+    if (!["open", "in_progress"].includes(list.status)) throw new Error("A pelada já foi encerrada.");
+    const targetUserSnap = await transaction.get(doc(db, "users", userData.id));
+    if (!targetUserSnap.exists()) throw new Error("Usuário não encontrado.");
+    const targetUser = { ...targetUserSnap.data(), id: userData.id };
+    if (requireGuestRequest && (!isGuestParticipant(targetUser) || !(list.guestRequests || []).some((person) => person.id === targetUser.id))) {
+      throw new Error("Solicitação de convidado não encontrada.");
+    }
+    const groups = getPresenceGroups(list);
+    if (Object.values(groups).flat().some((person) => person.id === targetUser.id)) {
       throw new Error("Esse jogador ja esta na lista.");
     }
-
-    const target = groupKey === "setters" ? setters : players;
-    const limitKey = group === "setter" ? "settersLimit" : "playersLimit";
-    if (target.length >= (list[limitKey] || 0)) throw new Error("Esse grupo ja esta cheio.");
-
-    const nextSetters = groupKey === "setters" ? [...setters, buildParticipant(userData)] : setters;
-    const nextPlayers = groupKey === "players" ? [...players, buildParticipant(userData)] : players;
-    const update = {
-      setters: nextSetters,
-      players: nextPlayers,
+    const destination = isGuestParticipant(targetUser) ? "guests" : getGroupKey(group);
+    if (destination === "guests" && !isGuestParticipant(targetUser)) throw new Error("Selecione levantador ou jogador para um membro.");
+    const participant = { ...buildParticipant(targetUser), isSetter: group === "setter" };
+    groups[destination] = [...groups[destination], participant];
+    transaction.update(listRef, {
+      ...presenceUpdate(list, groups),
+      guestRequests: (list.guestRequests || []).filter((person) => person.id !== targetUser.id),
       updatedAt: serverTimestamp(),
-    };
-
-    if (list.status === "in_progress") {
-      update.confirmedSetters = nextSetters;
-      update.confirmedPlayers = nextPlayers;
-    }
-
-    transaction.update(listRef, update);
+    });
   });
 }
 
@@ -885,20 +925,13 @@ export async function adminRemoveVolleyListParticipant({ listId, userId }) {
   const listRef = doc(db, COLLECTION_NAME, listId);
 
   await runTransaction(db, async (transaction) => {
+    await requirePresenceActor(transaction, true);
     const listSnap = await transaction.get(listRef);
     if (!listSnap.exists()) throw new Error("Lista nao encontrada.");
 
     const list = listSnap.data();
-    const setters = (list.confirmedSetters || list.setters || []).filter((person) => person.id !== userId);
-    const players = (list.confirmedPlayers || list.players || []).filter((person) => person.id !== userId);
-    const update = { setters, players, updatedAt: serverTimestamp() };
-
-    if (list.status === "in_progress") {
-      update.confirmedSetters = setters;
-      update.confirmedPlayers = players;
-    }
-
-    transaction.update(listRef, update);
+    if (!["open", "in_progress"].includes(list.status)) throw new Error("A pelada já foi encerrada.");
+    transaction.update(listRef, { ...presenceUpdate(list, removeParticipantFromGroups(list, userId)), updatedAt: serverTimestamp() });
   });
 }
 
@@ -906,16 +939,15 @@ export async function swapVolleyListParticipants({ listId, firstUserId, secondUs
   const listRef = doc(db, COLLECTION_NAME, listId);
 
   await runTransaction(db, async (transaction) => {
+    await requirePresenceActor(transaction, true);
     const listSnap = await transaction.get(listRef);
     if (!listSnap.exists()) throw new Error("Lista nao encontrada.");
 
     const list = listSnap.data();
-    const groups = {
-      setters: [...(list.confirmedSetters || list.setters || [])],
-      players: [...(list.confirmedPlayers || list.players || [])],
-    };
+    if (!["open", "in_progress"].includes(list.status)) throw new Error("A pelada já foi encerrada.");
+    const groups = getPresenceGroups(list);
     const locate = (userId) => {
-      for (const group of ["setters", "players"]) {
+      for (const group of ["setters", "players", "guests"]) {
         const index = groups[group].findIndex((person) => person.id === userId);
         if (index >= 0) return { group, index };
       }
@@ -925,21 +957,15 @@ export async function swapVolleyListParticipants({ listId, firstUserId, secondUs
     const second = locate(secondUserId);
 
     if (!first || !second) throw new Error("Jogador nao encontrado na lista.");
+    if ((first.group === "guests") !== (second.group === "guests")) {
+      throw new Error("Convidados devem permanecer no grupo de convidados. Troque a ordem entre convidados.");
+    }
 
     const firstPerson = groups[first.group][first.index];
     groups[first.group][first.index] = groups[second.group][second.index];
     groups[second.group][second.index] = firstPerson;
 
-    const update = {
-      setters: groups.setters,
-      players: groups.players,
-      updatedAt: serverTimestamp(),
-    };
-    if (list.status === "in_progress") {
-      update.confirmedSetters = groups.setters;
-      update.confirmedPlayers = groups.players;
-    }
-    transaction.update(listRef, update);
+    transaction.update(listRef, { ...presenceUpdate(list, groups), updatedAt: serverTimestamp() });
   });
 }
 
@@ -1204,10 +1230,13 @@ export async function startVolleyMatch({ listId }) {
     if (!listSnap.exists()) throw new Error("Lista nao encontrada.");
 
     const list = listSnap.data();
+    const groups = getPresenceGroups(list, false);
     transaction.update(listRef, {
       status: "in_progress",
-      confirmedSetters: asPlain(list.setters || []),
-      confirmedPlayers: asPlain(list.players || []),
+      ...groups,
+      confirmedSetters: asPlain(groups.setters),
+      confirmedPlayers: asPlain(groups.players),
+      confirmedGuests: asPlain(groups.guests),
       confirmationFrozenAt: serverTimestamp(),
       matchPlayers: [],
       teams: [],
