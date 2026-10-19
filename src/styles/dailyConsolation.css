@@ -36,6 +36,13 @@
 .daily-consolation-metric { min-width: 0; }
 .daily-consolation-metric strong { font-size: 22px; overflow-wrap: anywhere; }
 .daily-consolation-metric span { font-size: 11px; }
+.daily-consolation-mascot {
+  display: block;
+  width: 100%;
+  height: 220px;
+  object-fit: contain;
+  margin: 0 auto;
+}
 @keyframes consolation-appear {
   from { opacity: 0; transform: translateY(12px) scale(.98); }
   to { opacity: 1; transform: translateY(0) scale(1); }

@@ -7,8 +7,9 @@ import * as jsx from "react/jsx-runtime";
 import { create, act } from "react-test-renderer";
 import { transformWithEsbuild } from "vite";
 import { matchTimelinePath } from "../src/utils/matchTimeline.js";
+import { maintenanceCompensation } from "../src/data/feedCompensation.js";
 
-async function feedFixture() {
+async function feedFixture(stats = { feedCompensationClaims: { [maintenanceCompensation.id]: { reward: 1 } } }) {
   let subscription, stopped = false;
   const previews = [];
   const source = await readFile(new URL("../src/pages/Feed.jsx", import.meta.url), "utf8");
@@ -20,10 +21,11 @@ async function feedFixture() {
     "react-router-dom": { Link: ({ to, children, ...props }) => React.createElement("a", { href: to, ...props }, children) },
     "../utils/matchTimeline": { matchTimelinePath },
     "../components/FeedBannerCarousel": { default: () => React.createElement("aside", { "data-testid": "banner" }) },
-    "../components/DailyConsolationCard": { default: ({ post }) => React.createElement("article", { "data-testid": "consolation" }, post.title) },
+    "../components/DailyConsolationCard": { default: ({ post }) => React.createElement("article", { "data-testid": post.type === "maintenance_compensation" ? "compensation" : "consolation" }, post.title) },
+    "../data/feedCompensation": { maintenanceCompensation },
     "../assets/app-backgrounds/bg-geral.png": { default: "background.png" },
     "../components/OrbitLoader": { default: () => React.createElement("span", { role: "status" }) },
-    "../contexts/AuthContext": { useAuth: () => ({ userData: { id: "self" }, sessionData: {} }) },
+    "../contexts/AuthContext": { useAuth: () => ({ userData: { id: "self" }, sessionData: { stats } }) },
     "../hooks/usePublicProfiles": {
       usePublicProfilePreviews: (ids) => { previews.push(ids); return {}; },
       useSelectedPublicProfile: () => ({ bundle: {}, loading: false }),
@@ -105,6 +107,17 @@ test("daily consolation feed card is rendered only for an eligible account", asy
   assert.equal(f.view.root.findAllByProps({ "data-testid": "consolation" }).length, 1);
   assert.ok(f.previews.every((ids) => ids.length === 0));
   await f.close();
+});
+
+test("maintenance compensation appears without extra queries and redeemed daily rewards stay hidden", async () => {
+  const f = await feedFixture({ dailyConsolationClaims: { day: { reward: 1 } } });
+  await f.deliver([{ id: "reward-self", type: "daily_consolation", payload: { listId: "day", recipients: { self: { reward: 1 } } } }]);
+  assert.equal(f.view.root.findAllByProps({ "data-testid": "compensation" }).length, 1);
+  assert.equal(f.view.root.findAllByProps({ "data-testid": "consolation" }).length, 0);
+  assert.ok(f.previews.every((ids) => ids.length === 0));
+  await f.close();
+  const source = await readFile(new URL("../src/pages/Feed.jsx", import.meta.url), "utf8");
+  assert.doesNotMatch(source, /localPreview|local-consolation-preview|listId: "local-preview"/);
 });
 
 test("retired guide styles, ADM query and external message font are removed", async () => {

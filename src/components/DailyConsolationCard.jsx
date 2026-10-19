@@ -3,42 +3,46 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AlertCircle, ArrowUpRight, Check, Gamepad2, HeartHandshake, Percent, TrendingDown, X } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
-import { claimDailyConsolation } from "../services/dailyConsolationService";
+import { claimDailyConsolation, claimMaintenanceCompensation } from "../services/dailyConsolationService";
 import coinIcon from "../assets/achievements/coin.png";
+import maintenanceMascot from "../assets/app-backgrounds/manutencao-1.png";
+import { maintenanceCompensation } from "../data/feedCompensation";
 import "../styles/dailyConsolation.css";
 
-export default function DailyConsolationCard({ post, localPreview = false }) {
+export default function DailyConsolationCard({ post }) {
   const { userData, sessionData } = useAuth();
   const [open, setOpen] = useState(false);
-  const [previewClaimed, setPreviewClaimed] = useState(false);
-  const preview = import.meta.env?.DEV === true && localPreview;
-  const award = post.payload?.recipients?.[userData?.id];
-  if (!award) return null;
-  const claimed = preview ? previewClaimed : Boolean(sessionData?.stats?.dailyConsolationClaims?.[post.payload.listId]);
+  const [redeemed, setRedeemed] = useState(false);
+  const compensation = post.type === "maintenance_compensation" && post.id === maintenanceCompensation.id;
+  const award = compensation ? maintenanceCompensation.payload : post.payload?.recipients?.[userData?.id];
+  const claimed = compensation
+    ? sessionData?.stats?.feedCompensationClaims?.[maintenanceCompensation.id]
+    : sessionData?.stats?.dailyConsolationClaims?.[post.payload.listId];
+  if (!userData?.id || !award || claimed || redeemed) return null;
   return (
     <article className="feed-report-card daily-consolation-card flex items-center gap-3 px-4 py-3">
       <div className="feed-report-icon flex h-8 w-8 shrink-0 items-center justify-center"><HeartHandshake size={20} /></div>
-      <h2 className="min-w-0 flex-1 whitespace-nowrap text-base font-black">Dia ruim?</h2>
+      <h2 className="min-w-0 flex-1 whitespace-nowrap text-base font-black">{compensation ? "Me perdoa..." : "Dia ruim?"}</h2>
       <div className="daily-consolation-more relative shrink-0">
         <button type="button" onClick={() => setOpen(true)} className="admin-primary-action flex min-h-10 items-center justify-center gap-1 px-3 text-xs font-black">
-          {claimed && <Check size={14} />}Ver mais<ArrowUpRight size={15} />
+          Ver mais<ArrowUpRight size={15} />
         </button>
-        {!claimed && <span className="profile-mission-alert" aria-label="Recompensa disponível">!</span>}
+        <span className="profile-mission-alert" aria-label="Recompensa disponível">!</span>
       </div>
-      {open && <ConsolationModal post={post} award={award} onClose={() => setOpen(false)} preview={preview} previewClaimed={previewClaimed} onPreviewClaim={() => setPreviewClaimed(true)} />}
+      {open && <ConsolationModal post={post} award={award} compensation={compensation} onClose={() => setOpen(false)} onClaimed={() => setRedeemed(true)} />}
     </article>
   );
 }
 
-function ConsolationModal({ post, award, onClose, preview, previewClaimed, onPreviewClaim }) {
+function ConsolationModal({ post, award, onClose, compensation, onClaimed }) {
   const { userData, sessionData, updateSessionData } = useAuth();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [redeemed, setRedeemed] = useState(false);
   const panel = useRef(null), inFlight = useRef(false);
   const close = useRef(onClose);
   close.current = onClose;
-  const claimed = redeemed || (preview ? previewClaimed : Boolean(sessionData?.stats?.dailyConsolationClaims?.[post.payload.listId]));
+  const claimed = compensation ? Boolean(sessionData?.stats?.feedCompensationClaims?.[maintenanceCompensation.id])
+    : Boolean(sessionData?.stats?.dailyConsolationClaims?.[post.payload.listId]);
   useEffect(() => {
     const focus = document.activeElement;
     const bodyStyle = document.body.style.cssText, htmlOverflow = document.documentElement.style.overflow;
@@ -68,21 +72,16 @@ function ConsolationModal({ post, award, onClose, preview, previewClaimed, onPre
 
   async function claim() {
     if (inFlight.current || claimed) return;
-    if (preview) {
-      setRedeemed(true);
-      onPreviewClaim();
-      return;
-    }
     inFlight.current = true;
     setBusy(true);
     setError("");
     try {
-      const result = await claimDailyConsolation(post.payload.listId);
+      const result = compensation ? await claimMaintenanceCompensation() : await claimDailyConsolation(post.payload.listId);
       updateSessionData({
         user: { ...userData, progression: { ...userData.progression, coins: result.coins } },
         stats: result.stats,
       });
-      setRedeemed(true);
+      onClaimed();
     } catch (failure) {
       setError(failure.message || "Não foi possível resgatar. Tente novamente.");
     } finally {
@@ -95,9 +94,13 @@ function ConsolationModal({ post, award, onClose, preview, previewClaimed, onPre
     <div className="daily-consolation-overlay" onClick={(event) => { if (event.target === event.currentTarget && !inFlight.current) onClose(); }}>
       <section ref={panel} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="daily-consolation-title" className="profile-mission-panel daily-consolation-modal p-5 text-white outline-none">
         <header className="flex items-start justify-between gap-3">
-          <h2 id="daily-consolation-title" className="font-idv-title text-2xl leading-tight">Políticas Sociais</h2>
+          <h2 id="daily-consolation-title" className="font-idv-title text-2xl leading-tight">{compensation ? "Me perdoa..." : "Políticas Sociais"}</h2>
           <button type="button" onClick={onClose} disabled={busy} className="profile-modal-close flex h-9 w-9 shrink-0 items-center justify-center" aria-label="Fechar recompensa"><X size={18} /></button>
         </header>
+        {compensation ? <>
+          <p className="my-5 text-sm leading-relaxed text-white/80">Desculpe pelo transtorno. Puxei o cabo sem querer. Aqui está uma compensação pelos problemas técnicos.</p>
+          <img src={maintenanceMascot} alt="Mascote pedindo desculpas pela manutenção" className="daily-consolation-mascot" />
+        </> : <>
         <p className="my-5 text-sm leading-relaxed text-white/80">Por aqui tratamos quem perde quase igual quem ganha: como se fosse gente.</p>
         <p className="mb-2 text-right text-xs text-white/45">{post.payload.date?.split("-").reverse().join("/")}</p>
         <div className="grid grid-cols-3 gap-2">
@@ -105,6 +108,7 @@ function ConsolationModal({ post, award, onClose, preview, previewClaimed, onPre
           <Metric icon={TrendingDown} value={award.losses} label="derrotas" />
           <Metric icon={Percent} value={`${(award.losses / award.games * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`} label="de derrotas" />
         </div>
+        </>}
         {error && <p role="alert" className="mt-4 text-sm text-red-300">{error}</p>}
         <div className="mt-5 flex items-stretch gap-3">
           <span className="daily-consolation-reward flex shrink-0 items-center justify-center gap-2 px-3 text-lg text-[#ffb071]"><img src={coinIcon} alt="Moedas" className="h-6 w-6" />{award.reward}c</span>

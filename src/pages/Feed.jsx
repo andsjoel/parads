@@ -16,6 +16,7 @@ import { usePublicProfilePreviews, useSelectedPublicProfile } from "../hooks/use
 import { subscribeFeedPosts } from "../services/volleyReportService";
 import { buildMockProfileBundle } from "../services/volleyListService";
 import { matchTimelinePath } from "../utils/matchTimeline";
+import { maintenanceCompensation } from "../data/feedCompensation";
 
 function formatDate(value) {
   if (!value) return "";
@@ -85,17 +86,10 @@ export default function Feed() {
       <section className="feed-content mx-auto flex w-full max-w-[420px] flex-col gap-4">
         <FeedBannerCarousel />
         <div className="feed-posts space-y-4 px-5">
-          {import.meta.env?.DEV && userData?.id && (
-            <DailyConsolationCard localPreview post={{
-              id: "local-consolation-preview",
-              payload: { listId: "local-preview", date: "2026-10-18", recipients: {
-                [userData.id]: { games: 7, losses: 6, reward: 2 },
-              } },
-            }} />
-          )}
+          {userData?.id && !sessionData?.stats?.feedCompensationClaims?.[maintenanceCompensation.id] && <DailyConsolationCard post={maintenanceCompensation} />}
           {loading && <div className="flex justify-center py-10"><OrbitLoader size={30} /></div>}
           {!loading && posts
-            .filter((post) => post.type !== "games" && (post.type !== "daily_consolation" || post.payload?.recipients?.[userData?.id]))
+            .filter((post) => post.type !== "games" && (post.type !== "daily_consolation" || (post.payload?.recipients?.[userData?.id] && !sessionData?.stats?.dailyConsolationClaims?.[post.payload.listId])))
             .map((post) => post.type === "daily_consolation" ? <DailyConsolationCard key={post.id} post={post} /> : (
               <FeedReportCard
                 key={post.id}

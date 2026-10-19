@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import { SourceTextModule, SyntheticModule } from "node:vm";
 import * as firestore from "firebase/firestore";
 import * as rewards from "../../src/utils/dailyConsolation.js";
+import * as compensation from "../../src/data/feedCompensation.js";
 import { volleyListModule } from "../support/volley-list-module.mjs";
 import { createEmulatorEnvironment } from "../support/emulator-environment.mjs";
 
@@ -16,7 +17,8 @@ async function service(uid) {
   const entry = new SourceTextModule(await readFile(new URL("../../src/services/dailyConsolationService.js", import.meta.url), "utf8"));
   await entry.link((specifier) => {
     const values = specifier === "firebase/firestore" ? firestore
-      : specifier === "../firebase/firebase" ? { db, auth: { currentUser: { uid } } } : rewards;
+      : specifier === "../firebase/firebase" ? { db, auth: { currentUser: { uid } } }
+      : specifier === "../data/feedCompensation" ? compensation : rewards;
     return new SyntheticModule(Object.keys(values), function () {
       for (const [key, value] of Object.entries(values)) this.setExport(key, value);
     });
@@ -78,5 +80,29 @@ test("registered members and ADMs can redeem their own bonuses, including a miss
     const result = await (await service(uid)).claimDailyConsolation(`${uid}-day`);
     assert.equal(result.reward, 3);
     assert.equal((await env.db.doc(`user_stats/${uid}`).get()).data().dailyConsolationClaims[`${uid}-day`].reward, 3);
+  }
+});
+
+test("one-time compensation gives exactly one coin to member, provisioned guest and ADM, independently from daily rewards", async () => {
+  for (const uid of ["fixture-member", "fixture-guest", "fixture-admin"]) {
+    const before = (await env.db.doc(`users/${uid}`).get()).data();
+    const statsBefore = (await env.db.doc(`user_stats/${uid}`).get()).data();
+    const inventory = (await env.db.doc(`user_inventory/${uid}`).get()).data();
+    const api = await service(uid);
+    const results = await Promise.all([api.claimMaintenanceCompensation(), api.claimMaintenanceCompensation()]);
+    assert.equal(results.reduce((total, result) => total + result.reward, 0), 1);
+    assert.equal((await env.db.doc(`users/${uid}`).get()).data().progression.coins, before.progression.coins + 1);
+    assert.equal((await env.db.doc(`public_profiles/${uid}`).get()).data().progression.coins, before.progression.coins + 1);
+    const stats = (await env.db.doc(`user_stats/${uid}`).get()).data();
+    assert.deepEqual(stats.dailyConsolationClaims, statsBefore.dailyConsolationClaims);
+    assert.equal(stats.feedCompensationClaims[compensation.maintenanceCompensation.id].reward, 1);
+    assert.deepEqual((await env.db.doc(`user_inventory/${uid}`).get()).data(), inventory);
+    assert.equal((await api.claimMaintenanceCompensation()).reward, 0);
+  }
+});
+
+test("outsiders and disabled accounts cannot redeem maintenance compensation", async () => {
+  for (const uid of ["fixture-outsider", "fixture-disabled"]) {
+    await assert.rejects((await service(uid)).claimMaintenanceCompensation(), { code: "permission-denied" });
   }
 });
