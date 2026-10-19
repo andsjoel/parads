@@ -1,2 +1,2 @@
-// Local development is open; production stays in maintenance until explicitly released.
-export const MAINTENANCE_ENABLED = import.meta.env?.DEV !== true;
+// Set to true and redeploy to show maintenance on every route.
+export const MAINTENANCE_ENABLED = false;

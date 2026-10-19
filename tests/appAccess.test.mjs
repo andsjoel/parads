@@ -32,11 +32,11 @@ async function renderApp({ maintenance, mobile, pathname }) {
   return entry.namespace.default();
 }
 
-test("maintenance is enabled for this release", () => {
-  assert.equal(MAINTENANCE_ENABLED, true);
+test("maintenance is disabled for the approved public release", () => {
+  assert.equal(MAINTENANCE_ENABLED, false);
 });
 
-test("only the local development environment bypasses maintenance", async () => {
+test("the released app remains open in development and production", async () => {
   const config = await readFile(new URL("../src/config/appStatus.js", import.meta.url), "utf8");
   for (const dev of [true, false, undefined]) {
     const entry = new SourceTextModule(config, {
@@ -44,7 +44,7 @@ test("only the local development environment bypasses maintenance", async () => 
     });
     await entry.link(() => { throw new Error("Unexpected config dependency"); });
     await entry.evaluate();
-    assert.equal(entry.namespace.MAINTENANCE_ENABLED, dev !== true);
+    assert.equal(entry.namespace.MAINTENANCE_ENABLED, false);
   }
 });
 
