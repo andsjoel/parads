@@ -10,7 +10,6 @@ export function setPublicProfileCacheScope(userId) {
 
 export function invalidatePublicProfileCache(userId) {
   entries.delete("directory");
-  entries.delete("guide-admin");
   if (userId) {
     entries.delete(`bundle:${userId}`);
     entries.delete(`preview:${userId}`);

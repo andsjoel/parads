@@ -14,6 +14,7 @@ import Shop from "../pages/Shop";
 
 import AdminVolleyList from "../pages/AdminVolleyList";
 import AdminReports from "../pages/AdminReports";
+import AdminMatchTimeline from "../pages/AdminMatchTimeline";
 import Cards from "../pages/Cards";
 import ChangePassword from "../pages/ChangePassword";
 
@@ -37,6 +38,7 @@ export default function AppRoutes() {
         <Route path="feed" element={<Feed />} />
         <Route path="list" element={<MatchList mode="presence" />} />
         <Route path="matches" element={<MatchList mode="matches" />} />
+        <Route path="matches-map" element={<AdminMatchTimeline />} />
         <Route path="profile" element={<Profile />} />
         <Route path="shop" element={<Shop />} />
         <Route path="cards" element={<Cards />} />
@@ -49,6 +51,7 @@ export default function AppRoutes() {
         <Route path="admin/volley-list" element={<AdminVolleyList mode="list" />} />
         <Route path="admin/matches" element={<AdminVolleyList mode="matches" />} />
         <Route path="admin/reports" element={<AdminReports />} />
+        <Route path="admin/matches-map" element={<AdminMatchTimeline />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/login" replace />} />

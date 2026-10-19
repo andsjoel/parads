@@ -5,6 +5,7 @@ import {
   CalendarPlus,
   Check,
   Crown,
+  LoaderCircle,
   Pencil,
   Plus,
   RotateCcw,
@@ -24,6 +25,7 @@ import OrbitLoader from "../components/OrbitLoader";
 import InviteCreateModal from "../components/admin/InviteCreateModal";
 import CourtTeamsFrame from "../components/matches/CourtTeamsFrame";
 import { useAuth } from "../contexts/AuthContext";
+import { usePendingAdditions } from "../hooks/usePendingAdditions";
 import generalBackground from "../assets/app-backgrounds/bg-geral.png";
 import { buildTeamDisplaySlots } from "../utils/teamSlots";
 import { getGuestRequests, getPresenceGroups, getPresenceLimit, isGuestParticipant } from "../utils/presenceGroups";
@@ -419,6 +421,7 @@ export default function AdminVolleyList({ mode = "list" }) {
   const [vacancySwapTarget, setVacancySwapTarget] = useState(null);
   const [winConfirmationIndex, setWinConfirmationIndex] = useState(null);
   const [guestInviteName, setGuestInviteName] = useState(null);
+  const arrivals = usePendingAdditions(list?.id);
 
   useEffect(() => {
     setIsLoading(true);
@@ -500,6 +503,7 @@ export default function AdminVolleyList({ mode = "list" }) {
   }, [confirmedPeople, list?.mockProfiles, users]);
   const cleanSearch = search.trim().toLowerCase();
   const availableUsers = searchableUsers
+    .filter((user) => !arrivals.pending.some((item) => item.id === user.id))
     .filter((user) => !activeMatchPlayers.some((player) => player.userId === user.id))
     .filter((user) => {
       if (!cleanSearch) return true;
@@ -627,20 +631,20 @@ export default function AdminVolleyList({ mode = "list" }) {
     });
   }
 
-  function handleAddUser(user, isSetter = false) {
+  function handleAddUser(user, isSetter = false, clearSearch = true) {
     if (!list) return;
 
-    runAdminAction(`add-${user.id}`, async () => {
-      await addVolleyMatchPlayer({
+    if (clearSearch) setSearch("");
+    return arrivals.add({ id: user.id, name: getDisplayName(user), user, isSetter }, () =>
+      addVolleyMatchPlayer({
         listId: list.id,
         userData: user,
         overrides: {
           isSetter,
           sex: user.sex || "male",
         },
-      });
-      setSearch("");
-    });
+      }),
+    );
   }
 
   function handleAddGuest() {
@@ -1055,6 +1059,29 @@ export default function AdminVolleyList({ mode = "list" }) {
                         className="h-11 w-full rounded-2xl border border-white/10 bg-white/[0.06] px-4 text-sm text-white outline-none placeholder:text-[#66736b] focus:border-app-primary/40"
                       />
 
+                      <div aria-live="polite" aria-atomic="false">
+                        {arrivals.pending.filter((item) => !activeMatchPlayers.some((player) => player.userId === item.id)).map((item) => (
+                          <div key={item.id} role="status" className="mt-2 flex min-h-10 items-center gap-2 border-l-2 border-app-primary bg-white/[0.04] px-3 py-2 text-sm">
+                            <LoaderCircle size={16} className="shrink-0 animate-spin text-app-primary" aria-hidden="true" />
+                            <span className="min-w-0 flex-1 break-words font-bold text-[#fffaf0]">{item.name}</span>
+                            <span className="shrink-0 text-xs text-[#9aa89f]">adicionando…</span>
+                          </div>
+                        ))}
+                      </div>
+                      {arrivals.failures.filter((item) => !activeMatchPlayers.some((player) => player.userId === item.id)).map((item) => (
+                        <div key={item.id} role="alert" className="mt-2 border-l-2 border-red-400 bg-red-950/30 px-3 py-2 text-sm text-red-200">
+                          <p className="break-words">{item.name} não foi adicionado. Tente novamente.</p>
+                          <div className="mt-2 flex items-center justify-between gap-2">
+                            <button type="button" onClick={() => handleAddUser(item.user, item.isSetter, false)} className="flex min-h-11 items-center gap-2 font-bold text-app-primary">
+                              <RotateCw size={16} /> Tentar novamente
+                            </button>
+                            <button type="button" onClick={() => arrivals.dismiss(item.id)} aria-label={`Fechar aviso de ${item.name}`} className="flex h-11 w-11 shrink-0 items-center justify-center">
+                              <X size={17} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+
                       {cleanSearch && (
                         <div className="admin-arrival-search-results mt-2 max-h-48 space-y-1 overflow-y-auto p-1">
                           {availableUsers.map((user) => (
@@ -1112,7 +1139,7 @@ export default function AdminVolleyList({ mode = "list" }) {
                       {!list.teamsFormedAt && (
                         <button
                           type="button"
-                          disabled={activeMatchPlayers.length < 12 || busyAction === "form-teams"}
+                          disabled={activeMatchPlayers.length < 12 || busyAction === "form-teams" || arrivals.pending.length > 0}
                           onClick={() => setShowFormTeamsConfirm(true)}
                           className="admin-primary-action mt-3 flex h-11 w-full items-center justify-center gap-2 text-sm disabled:cursor-not-allowed disabled:opacity-35"
                         >
@@ -1127,7 +1154,7 @@ export default function AdminVolleyList({ mode = "list" }) {
                     <button
                       type="button"
                       onClick={() => setConfirmAction("finish-day")}
-                      disabled={busyAction === "finish"}
+                      disabled={busyAction === "finish" || arrivals.pending.length > 0}
                       className="admin-finish-day flex h-12 w-full items-center justify-center gap-2 text-sm font-black text-red-200 disabled:opacity-50"
                     >
                       <XCircle size={17} />

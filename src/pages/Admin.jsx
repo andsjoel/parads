@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { BarChart3, GalleryVerticalEnd, LogOut, ShieldCheck, UserPlus, Volleyball, X } from "lucide-react";
+import { BarChart3, GalleryVerticalEnd, LogOut, Route as RouteIcon, ShieldCheck, UserPlus, Volleyball, X } from "lucide-react";
 
 import { useAuth } from "../contexts/AuthContext";
 import { logoutUser } from "../services/authServices";
@@ -8,6 +8,7 @@ import generalBackground from "../assets/app-backgrounds/bg-geral.png";
 
 const publicServices = [
   { title: "Cartas", description: "Veja o perfil dos atletas", icon: GalleryVerticalEnd, to: "/cards", tone: "athletes" },
+  { title: "Mapa de jogos", description: "Histórico dos confrontos", icon: RouteIcon, to: "/matches-map", tone: "map" },
 ];
 
 const adminServices = [

@@ -106,7 +106,6 @@ test("own live stats and embedded profiles require no remote reads", async () =>
   await act(async () => view.update(React.createElement(Probe, { bundle: self(2) })));
   assert.equal(result[fixture.ids[0]].stats.wins, 2);
   assert.equal(fixture.counts.gets, 0);
-  assert.equal((await api.getGuideAdminProfile({ ...self(2), user: { id: fixture.ids[0], role: "admin" } })).stats.wins, 2);
   assert.equal(fixture.counts.gets + fixture.counts.queries, 0);
   await act(async () => view.unmount());
 });
@@ -147,20 +146,6 @@ test("directory re-entry preserves all members and orphan filtering: 800 -> 80 r
   fixture.documents.delete(`user_inventory/${fixture.ids[1]}`);
   cache.invalidatePublicProfileCache(fixture.ids[1]);
   assert.equal((await api.getPublicProfileDirectory()).length, 39);
-});
-
-test("empty-feed ADM lookup no longer scans all profiles and inventories: 83 -> 4 reads", async () => {
-  const old = sdkFixture();
-  const before = await publicProfileModule(old.sdk, {}, true);
-  const members = await before.api.getPublicProfileDirectory();
-  await before.api.getPublicProfileBundle(members.find((member) => member.role === "admin").id);
-  assert.equal(old.counts.documents, 83);
-  const fixture = sdkFixture();
-  const { api } = await publicProfileModule(fixture.sdk);
-  assert.equal((await api.getGuideAdminProfile()).user.id, fixture.ids[0]);
-  await api.getGuideAdminProfile();
-  assert.equal(fixture.counts.documents, 4);
-  assert.equal(fixture.counts.queries, 1);
 });
 
 test("concurrent requests deduplicate, errors retry and account switches discard pending data", async () => {
@@ -205,18 +190,6 @@ test("negative cache expires and failed requests do not poison subsequent previe
     fixture.fail(false);
     assert.ok((await api.getPublicProfilePreviews([fixture.ids[1]]))[fixture.ids[1]]);
   } finally { Date.now = originalNow; }
-});
-
-test("a legacy type-only ADM and missing administrators have bounded, compatible lookups", async () => {
-  const fixture = sdkFixture();
-  const { api, cache } = await publicProfileModule(fixture.sdk);
-  fixture.documents.set(`public_profiles/${fixture.ids[0]}`, { fullName: "Legacy ADM", type: "admin" });
-  assert.equal((await api.getGuideAdminProfile()).user.id, fixture.ids[0]);
-  assert.equal(fixture.counts.queries, 2);
-  fixture.documents.delete(`public_profiles/${fixture.ids[0]}`);
-  cache.invalidatePublicProfileCache(fixture.ids[0]);
-  assert.equal(await api.getGuideAdminProfile(), null);
-  assert.equal(fixture.counts.queries, 4);
 });
 
 test("automatic whole-group writes removed; existing realtime subscriptions retained", async () => {

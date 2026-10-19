@@ -5,7 +5,6 @@ import {
   getDocs,
   query,
   where,
-  limit,
   documentId,
   serverTimestamp,
   setDoc,
@@ -113,25 +112,6 @@ async function loadPublicProfileDirectory() {
       const secondName = second.profile?.displayName || second.fullName || second.username || "";
       return firstName.localeCompare(secondName, "pt-BR", { sensitivity: "base" });
     });
-}
-
-export function getGuideAdminProfile(selfBundle) {
-  if (selfBundle?.inventory && selfBundle?.stats
-    && (selfBundle.user?.role === "admin" || selfBundle.user?.type === "admin")) {
-    return Promise.resolve(selfBundle);
-  }
-  return rememberPublicProfile("guide-admin", async () => {
-    // The role query is normally sufficient; type also supports legacy accounts.
-    for (const field of ["role", "type"]) {
-      const snapshot = await getDocs(query(collection(db, "public_profiles"),
-        where(field, "==", "admin"), limit(10)));
-      for (const item of snapshot.docs) {
-        const bundle = await getPublicProfileBundle(item.id);
-        if (bundle) return bundle;
-      }
-    }
-    return null;
-  });
 }
 
 function getPublicUserPayload(user) {

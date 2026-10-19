@@ -10,7 +10,7 @@ let env;
 before(async () => { env = await createEmulatorEnvironment(); });
 after(async () => { await env?.cleanup(); });
 
-test("member, guest and ADM can load previews, complete cards, directory and targeted ADM query", async () => {
+test("member, guest and ADM can load previews, complete cards and directory", async () => {
   for (const uid of ["fixture-member", "fixture-guest", "fixture-admin"]) {
     const db = env.rulesEnv.authenticatedContext(uid).firestore();
     const { api } = await publicProfileModule(firestore, db);
@@ -21,7 +21,6 @@ test("member, guest and ADM can load previews, complete cards, directory and tar
     assert.equal(bundle.stats.wins, 3);
     assert.ok(bundle.inventory);
     assert.ok((await api.getPublicProfileDirectory()).some((person) => person.id === "fixture-guest"));
-    assert.equal((await api.getGuideAdminProfile()).user.id, "fixture-admin");
   }
 });
 
@@ -42,7 +41,6 @@ test("unauthenticated and Auth-without-invite clients cannot bypass authorizatio
     const { api } = await publicProfileModule(firestore, context.firestore());
     await assert.rejects(api.getPublicProfileBundle("fixture-member"), { code: "permission-denied" });
     await assert.rejects(api.getPublicProfileDirectory(), { code: "permission-denied" });
-    await assert.rejects(api.getGuideAdminProfile(), { code: "permission-denied" });
   }
 });
 

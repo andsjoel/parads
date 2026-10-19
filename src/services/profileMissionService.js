@@ -4,6 +4,7 @@ import { db } from "../firebase/firebase";
 import {
   getClaimableMissions,
   getPendingSequenceRewards,
+  getClaimedSequenceRewardAmount,
 } from "../data/profileMissions";
 
 export async function claimProfileMissionRewards(uid, category) {
@@ -56,13 +57,21 @@ export async function claimProfileMissionRewards(uid, category) {
       progression: { coins: currentCoins + reward },
       updatedAt: serverTimestamp(),
     }, { merge: true });
-    const claimedSequenceMilestoneHits = category === "currentStreak"
-      ? stats.sequenceMilestoneHits || {}
-      : stats.claimedSequenceMilestoneHits || {};
+    const claimedSequenceMilestoneHits = { ...(stats.claimedSequenceMilestoneHits || {}) };
+    const sequencePaymentUpdate = {};
+    if (category === "currentStreak") {
+      const amounts = { ...(stats.claimedSequenceRewardAmounts || {}) };
+      for (const item of sequenceRewards) {
+        claimedSequenceMilestoneHits[item.threshold] = stats.sequenceMilestoneHits?.[item.threshold] || 0;
+        amounts[item.threshold] = getClaimedSequenceRewardAmount(stats, item.threshold) + item.totalReward;
+      }
+      sequencePaymentUpdate.claimedSequenceRewardAmounts = amounts;
+    }
 
     transaction.update(statsRef, {
       claimedMissionIds,
       claimedSequenceMilestoneHits,
+      ...sequencePaymentUpdate,
       updatedAt: serverTimestamp(),
     });
 
@@ -72,6 +81,7 @@ export async function claimProfileMissionRewards(uid, category) {
         ...stats,
         claimedMissionIds,
         claimedSequenceMilestoneHits,
+        ...sequencePaymentUpdate,
       },
       reward,
     };

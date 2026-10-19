@@ -21,6 +21,8 @@ import { profilePicsCatalog } from "../data/profilePicsCatalog";
 import { profilePicBordersCatalog } from "../data/profilePicBordersCatalog";
 import { profileBackgroundsCatalog } from "../data/profileBackgroundsCatalog";
 import { DEFAULT_DISPLAY_CARD_ID } from "../data/displayCardsCatalog";
+import { isTimelineDate } from "../utils/matchTimeline";
+import { buildDailyConsolationPost, dailyConsolationPostId } from "../utils/dailyConsolation";
 
 const COLLECTION_NAME = "volley_lists";
 const TEAM_SIZE = 6;
@@ -181,8 +183,14 @@ async function syncPersistedGameStats({ transaction, beforePlayers, afterPlayers
       const beforeHits = beforePlayer.stats?.sequenceMilestoneHits || {};
       const afterHits = afterPlayer.stats?.sequenceMilestoneHits || {};
 
-      sequenceMilestones.forEach((threshold) => {
-        const gameDelta = (afterHits[threshold] || 0) - (beforeHits[threshold] || 0);
+      const thresholds = new Set([...sequenceMilestones, ...Object.keys(beforeHits).map(Number), ...Object.keys(afterHits).map(Number)]);
+      thresholds.forEach((threshold) => {
+        // Old snapshots lack the newly introduced milestones; the streak still records the crossing.
+        const crossing = sequenceMilestones.includes(threshold)
+          && beforePlayer.stats?.currentWinStreak === threshold - 1
+          && afterPlayer.stats?.currentWinStreak === threshold;
+        const gameDelta = (afterHits[threshold] || 0) - (beforeHits[threshold] || 0)
+          || (crossing ? 1 : 0);
         if (!gameDelta) return;
         sequenceMilestoneHits[threshold] = Math.max(
           0,
@@ -314,12 +322,12 @@ function canAddPlayerToTeam(list, team, player) {
     ),
   ).length;
   const womenLimit = teamWomenRuleMode === "two" ? 2 : 1;
+  const maxWomen = teamWomenRuleMode === "random" ? 2 : womenLimit;
 
   if (
-    teamWomenRuleMode !== "random"
-    && player.sex === "female"
+    player.sex === "female"
     && !player.isSetter
-    && womenCount >= womenLimit
+    && womenCount >= maxWomen
   ) return false;
 
   const playersAfterAdd = [...players, player];
@@ -555,13 +563,14 @@ function adaptWaitingTeamsForWomenRule(list, nextMode) {
 
 function isValidInitialTeam(list, players, totalWomen) {
   const womenLimit = list.womenRuleMode === "two" ? 2 : 1;
+  const maxWomen = list.womenRuleMode === "random" ? 2 : womenLimit;
   const womenCount = players.filter(
     (player) => player.sex === "female" && !player.isSetter,
   ).length;
   const requiredWomen = Math.min(womenLimit, Math.floor(totalWomen / 2));
   return players.length === TEAM_SIZE
     && players.filter((player) => player.isSetter).length === 1
-    && (list.womenRuleMode === "random" || womenCount <= womenLimit)
+    && womenCount <= maxWomen
     && womenCount >= requiredWomen;
 }
 
@@ -1761,6 +1770,7 @@ export async function finishVolleyList({ listId }) {
   const listRef = doc(db, COLLECTION_NAME, listId);
   const reportRef = doc(db, "volley_reports", listId);
   const metricsRef = doc(db, "app_metrics", "volley");
+  const mapPostRef = doc(db, "feed_posts", `match-map_${listId}`);
 
   const finalized = await runTransaction(db, async (transaction) => {
     const [listSnap, reportSnap, metricsSnap] = await Promise.all([
@@ -1797,6 +1807,7 @@ export async function finishVolleyList({ listId }) {
       teams: list.teams || [],
       returnTeam: list.returnTeam || null,
     };
+    const consolationPost = buildDailyConsolationPost(list, listId);
 
     transaction.update(listRef, {
       status: "closed",
@@ -1814,6 +1825,21 @@ export async function finishVolleyList({ listId }) {
       createdBy: list.createdBy || null,
       closedAt: serverTimestamp(),
     });
+
+    if (consolationPost) {
+      transaction.set(doc(db, "feed_posts", dailyConsolationPostId(listId)), {
+        ...consolationPost, createdAt: serverTimestamp(),
+      });
+    }
+
+    if (reportSummary.totalGames > 0 && isTimelineDate(list.date)) {
+      const [, month, day] = list.date.split("-");
+      transaction.set(mapPostRef, {
+        kind: "volley_map", type: "match_map", title: `Mapa de Jogos - ${day}/${month}`,
+        payload: { date: list.date, listId, totalGames: reportSummary.totalGames },
+        reportId: listId, createdBy: list.createdBy || null, createdAt: serverTimestamp(),
+      });
+    }
 
     const metrics = metricsSnap.exists() ? metricsSnap.data() : {};
     transaction.set(metricsRef, {

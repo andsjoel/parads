@@ -8,6 +8,7 @@ import {
   getClaimableMissions,
   getPendingSequenceRewards,
   getProfileStatValue,
+  getSequenceMissions,
   profileMissions,
 } from "../../data/profileMissions";
 
@@ -81,7 +82,9 @@ export default function ProfileStats({ stats, missionsEnabled = false, isClaimin
   }, [showAllMissions]);
 
   const selectedConfig = statsConfig.find((item) => item.key === selectedStat);
-  const selectedMissions = selectedStat ? profileMissions[selectedStat] || [] : [];
+  const selectedMissions = selectedStat === "currentStreak"
+    ? getSequenceMissions(stats)
+    : selectedStat ? profileMissions[selectedStat] || [] : [];
   const selectedValue = selectedStat ? getProfileStatValue(stats, selectedStat) : 0;
   const pendingSequenceIndex = selectedStat === "currentStreak"
     ? selectedMissions.findIndex((item) => pendingSequenceByThreshold.has(item.threshold))
@@ -101,7 +104,7 @@ export default function ProfileStats({ stats, missionsEnabled = false, isClaimin
     : 0;
   const completedCount = selectedMissions.filter((item) => {
     if (item.category === "currentStreak") {
-      return (stats?.sequenceMilestoneHits?.[item.threshold] || 0) > 0;
+      return selectedValue >= item.threshold && (stats?.sequenceMilestoneHits?.[item.threshold] || 0) > 0;
     }
     return selectedValue >= item.threshold;
   }).length;
@@ -110,8 +113,12 @@ export default function ProfileStats({ stats, missionsEnabled = false, isClaimin
     const pendingSequence = item.category === "currentStreak"
       ? pendingSequenceByThreshold.get(item.threshold)
       : null;
-    const completed = selectedValue >= item.threshold || Boolean(pendingSequence);
-    const claimed = item.category !== "currentStreak" && claimedIds.has(item.id);
+    const completed = item.category === "currentStreak"
+      ? selectedValue >= item.threshold && (stats?.sequenceMilestoneHits?.[item.threshold] || 0) > 0
+      : selectedValue >= item.threshold;
+    const claimed = item.category === "currentStreak"
+      ? completed && !pendingSequence
+      : claimedIds.has(item.id);
     return (
       <div
         key={item.id}

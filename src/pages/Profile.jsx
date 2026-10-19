@@ -14,6 +14,15 @@ export default function Profile() {
   const [isClaimingMissions, setIsClaimingMissions] = useState(false);
   const [selectedStat, setSelectedStat] = useState(null);
   const [isClaimingPromotion, setIsClaimingPromotion] = useState(false);
+  const [canRenderProfile, setCanRenderProfile] = useState(false);
+
+  useEffect(() => {
+    // Let the browser paint the loader before mounting the profile and missions.
+    let frame = window.requestAnimationFrame(() => {
+      frame = window.requestAnimationFrame(() => setCanRenderProfile(true));
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
 
   useEffect(() => {
     setUserData(authUserData);
@@ -51,9 +60,9 @@ export default function Profile() {
     }
   }
 
-  if (loadingAuth || !userData) {
+  if (!canRenderProfile || loadingAuth || !userData) {
     return (
-      <main className="profile-page flex h-[100dvh] items-center justify-center overflow-hidden px-5 pb-20 pt-3">
+      <main className="profile-page flex h-[100dvh] items-center justify-center overflow-hidden px-5 pb-20 pt-3" style={{ backgroundImage: `url(${generalBackground})` }}>
         <OrbitLoader />
       </main>
     );

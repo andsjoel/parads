@@ -1,11 +1,12 @@
 /* eslint-disable react/prop-types */
 import { useEffect, useMemo, useState } from "react";
-import { Navigate } from "react-router-dom";
-import { BarChart3, CalendarDays, Gamepad2, Send, Trash2, Trophy } from "lucide-react";
+import { Link, Navigate } from "react-router-dom";
+import { BarChart3, CalendarDays, Gamepad2, Route as RouteIcon, Send, Trash2, Trophy } from "lucide-react";
 
 import OrbitLoader from "../components/OrbitLoader";
 import { useAuth } from "../contexts/AuthContext";
 import generalBackground from "../assets/app-backgrounds/bg-geral.png";
+import { matchTimelinePath } from "../utils/matchTimeline";
 import {
   publishVolleyReportCard,
   removeVolleyReportCard,
@@ -105,9 +106,12 @@ export default function AdminReports() {
   return (
     <main className="reports-page min-h-screen px-5 pb-28 pt-6 text-white" style={{ backgroundImage: `url(${generalBackground})` }}>
       <section className="mx-auto w-full max-w-[420px] space-y-4">
-        <header>
+        <header className="flex items-start justify-between gap-3">
+          <div>
           <h1 className="font-idv-title text-3xl text-[#fffaf0]">Relatórios</h1>
           <p className="mt-1 text-xs font-bold text-white/45">Histórico geral e último dia encerrado</p>
+          </div>
+          <Link to="/matches-map" className="profile-modal-close flex h-11 w-11 shrink-0 items-center justify-center" aria-label="Abrir mapa dos jogos" title="Mapa dos jogos"><RouteIcon size={21} /></Link>
         </header>
 
         {error && <p className="report-error px-3 py-2 text-xs font-bold text-red-200">{error}</p>}
@@ -139,6 +143,7 @@ export default function AdminReports() {
                 <div className="report-metric"><strong>{report.summary?.totalGames || 0}</strong><span>partidas</span></div>
                 <div className="report-metric"><strong>{report.summary?.totalPlayers || 0}</strong><span>presentes</span></div>
               </div>
+              {report.summary?.totalGames > 0 && <Link to={matchTimelinePath(report.date)} className="report-publish-button mt-3 flex min-h-11 items-center justify-center gap-2 px-3 text-xs font-black"><RouteIcon size={17} />Mapa dos jogos desse dia</Link>}
               <div className="mt-3 flex justify-end"><PublishButton busy={busy === "day"} published={Boolean(getPublishedPost("day"))} onClick={() => togglePublication("day", `Pelada de ${formatDate(report.date)}`, { date: report.date, summary: { totalGames: report.summary?.totalGames || 0, totalPlayers: report.summary?.totalPlayers || 0 } })} /></div>
             </section>
 

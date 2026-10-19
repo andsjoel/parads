@@ -1,0 +1,45 @@
+.daily-consolation-card .feed-report-icon { color: #ffac72; }
+.daily-consolation-more .profile-mission-alert { top: -4px; right: -2px; }
+.daily-consolation-reward {
+  position: relative;
+  isolation: isolate;
+  min-width: 76px;
+  background: #cb733f;
+  clip-path: polygon(5% 5%, 96% 0, 100% 84%, 90% 100%, 0 94%);
+}
+.daily-consolation-reward::before {
+  position: absolute;
+  z-index: -1;
+  inset: 1px;
+  content: "";
+  background: #260c10;
+  clip-path: inherit;
+}
+.daily-consolation-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 20px;
+  background: rgb(0 0 0 / 78%);
+  backdrop-filter: blur(8px);
+}
+.daily-consolation-modal {
+  width: 100%;
+  max-width: 420px;
+  max-height: 85dvh;
+  overflow-y: auto;
+  animation: consolation-appear 180ms ease-out both;
+}
+.daily-consolation-metric { min-width: 0; }
+.daily-consolation-metric strong { font-size: 22px; overflow-wrap: anywhere; }
+.daily-consolation-metric span { font-size: 11px; }
+@keyframes consolation-appear {
+  from { opacity: 0; transform: translateY(12px) scale(.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .daily-consolation-modal { animation: none; }
+}

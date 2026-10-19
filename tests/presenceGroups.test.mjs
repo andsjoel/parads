@@ -22,15 +22,17 @@ async function harness(list = {}) {
       const result = await callback({
         get: async (ref) => {
           assert.equal(writes.length, 0, "Read after write");
-          return { ref, exists: () => documents.has(ref), data: () => structuredClone(documents.get(ref)) };
+          return { ref, id: ref.split("/").at(-1), exists: () => documents.has(ref), data: () => structuredClone(documents.get(ref)) };
         },
         update: (ref, changes) => writes.push(() => documents.set(ref, { ...documents.get(ref), ...changes })),
-        set: (ref, changes) => writes.push(() => documents.set(ref, changes)),
+        set: (ref, changes, options) => writes.push(() => documents.set(ref, options?.merge ? { ...documents.get(ref), ...changes } : changes)),
       });
       writes.forEach((write) => write());
       return result;
     },
-    collection() {}, deleteField() {}, getDoc() {}, getDocs() {}, increment() {}, limit() {}, onSnapshot() {}, query() {}, where() {}, writeBatch() {},
+    getDoc: async (ref) => ({ exists: () => documents.has(ref), data: () => structuredClone(documents.get(ref)) }),
+    writeBatch: () => ({ set() {}, commit: async () => {} }),
+    collection() {}, deleteField() {}, getDocs() {}, increment() {}, limit() {}, onSnapshot() {}, query() {}, where() {},
   };
   const cache = new Map();
   const root = new URL("../", import.meta.url);
@@ -50,6 +52,172 @@ async function harness(list = {}) {
   await entry.evaluate();
   return { api: entry.namespace, documents, auth, list: () => documents.get("volley_lists/day") };
 }
+
+function matchPlayer(entryId, sex = "male", isSetter = false, kind = "member") {
+  return { entryId, displayName: entryId, sex, isSetter, kind };
+}
+
+function regularTeam(prefix) {
+  return [matchPlayer(`${prefix}-s`, "male", true), matchPlayer(`${prefix}-w`, "female"),
+    ...Array.from({ length: 4 }, (_, i) => matchPlayer(`${prefix}-${i}`))];
+}
+
+function randomTeamsFixture(waiting, loser = regularTeam("loser")) {
+  const winner = regularTeam("winner");
+  return {
+    status: "in_progress", teamsFormedAt: "formed", womenRuleMode: "random", exitAfterTwoWins: false,
+    matchPlayers: [...winner, ...loser, ...waiting],
+    teams: [winner, loser, waiting].map((players, i) => ({
+      id: `team-${i}`, players: players.map((p) => p.entryId), wins: 0, womenRuleMode: "random",
+    })),
+  };
+}
+
+const womenInTeam = (list, team) => list.matchPlayers.filter((p) =>
+  team.players.includes(p.entryId) && p.sex === "female" && !p.isSetter
+  && p.entryId !== team.temporarySetterEntryId);
+
+test("closing a day publishes exactly one map announcement in the same transaction as the report", async () => {
+  const games = [{ id: "game-1", index: 1 }];
+  const f = await harness({ status: "in_progress", date: "2026-10-18", games, createdBy: "admin" });
+  await f.api.finishVolleyList({ listId: "day" });
+  assert.equal(f.list().status, "closed");
+  assert.equal(f.documents.get("volley_reports/day").summary.totalGames, 1);
+  const post = f.documents.get("feed_posts/match-map_day");
+  assert.equal(post.title, "Mapa de Jogos - 18/10");
+  assert.equal(post.type, "match_map");
+  assert.equal(post.payload.date, "2026-10-18");
+  assert.equal(post.payload.listId, "day");
+  assert.equal(f.documents.get("app_metrics/volley").totalDays, 1);
+  await f.api.finishVolleyList({ listId: "day" });
+  assert.equal([...f.documents.keys()].filter((key) => key.startsWith("feed_posts/")).length, 1);
+  assert.equal(f.documents.get("app_metrics/volley").totalDays, 1);
+  assert.deepEqual(f.list().games, games);
+});
+
+test("closing a list without matches does not announce an empty map", async () => {
+  const f = await harness({ date: "2026-10-18", games: [] });
+  await f.api.finishVolleyList({ listId: "day" });
+  assert.equal(f.documents.has("feed_posts/match-map_day"), false);
+  assert.equal(f.list().status, "closed");
+});
+
+test("new wins record intermediate milestones and undo/redo preserve sequence reward payments", async () => {
+  const winner = matchPlayer("winner", "male", true);
+  winner.userId = "member";
+  winner.stats = { currentWinStreak: 2, bestWinStreak: 2, sequenceMilestoneHits: { 2: 1 } };
+  const loser = matchPlayer("loser");
+  const { api, documents } = await harness({ status: "in_progress", matchPlayers: [winner, loser],
+    teams: [{ id: "a", players: ["winner"] }, { id: "b", players: ["loser"] }], games: [], history: [] });
+  documents.set("user_stats/member", { matchesPlayed: 2, wins: 2, currentStreak: 2,
+    sequenceMilestoneHits: { 2: 1 }, claimedSequenceMilestoneHits: { 2: 1 }, claimedSequenceRewardAmounts: { 2: 1 } });
+  await api.recordTeamWin({ listId: "day", winningTeamIndex: 0 });
+  assert.equal(documents.get("user_stats/member").sequenceMilestoneHits[3], 1);
+  await api.undoVolleyListAction({ listId: "day" });
+  assert.equal(documents.get("user_stats/member").sequenceMilestoneHits[3], 0);
+  await api.redoVolleyListAction({ listId: "day" });
+  assert.equal(documents.get("user_stats/member").sequenceMilestoneHits[3], 1);
+  assert.deepEqual(documents.get("user_stats/member").claimedSequenceRewardAmounts, { 2: 1 });
+});
+
+test("undo/redo of old snapshots reverses a backfilled intermediate milestone", async () => {
+  const before = { ...matchPlayer("winner"), userId: "member",
+    stats: { currentWinStreak: 2, bestWinStreak: 2, sequenceMilestoneHits: { 2: 1 } } };
+  const after = { ...before, stats: { ...before.stats, currentWinStreak: 3, bestWinStreak: 3 } };
+  const loser = matchPlayer("loser");
+  const game = { id: "old-game", index: 1, winnerPlayers: ["winner"], loserPlayers: ["loser"] };
+  const teams = [{ id: "a", players: ["winner"] }, { id: "b", players: ["loser"] }];
+  const { api, documents } = await harness({ status: "in_progress", teams, matchPlayers: [after, loser], games: [game],
+    history: [{ teamsFormed: true, teams, matchPlayers: [before, loser], games: [], attendedUserIds: [] }] });
+  documents.set("user_stats/member", { matchesPlayed: 3, wins: 3, currentStreak: 3,
+    sequenceMilestoneHits: { 2: 1, 3: 1 }, claimedSequenceMilestoneHits: { 2: 1 } });
+  await api.undoVolleyListAction({ listId: "day" });
+  assert.equal(documents.get("user_stats/member").sequenceMilestoneHits[3], 0);
+  await api.redoVolleyListAction({ listId: "day" });
+  assert.equal(documents.get("user_stats/member").sequenceMilestoneHits[3], 1);
+});
+
+test("random rule rejects a third woman, including a provisioned guest, on arrival", async () => {
+  const waiting = [matchPlayer("s", "male", true), matchPlayer("w1", "female"),
+    matchPlayer("w2", "female"), matchPlayer("m1"), matchPlayer("m2")];
+  const { api, list } = await harness(randomTeamsFixture(waiting));
+  const added = await api.addVolleyMatchPlayer({ listId: "day", userData: {
+    id: "guest-woman", ...user("guest-woman", "guest"), sex: "female",
+  } });
+  assert.equal(added.sex, "female");
+  assert.equal(added.kind, "guest");
+  assert.equal(list().teams[2].players.length, 5);
+  assert.equal(list().teams[3].players.includes(added.entryId), true);
+  assert.ok(list().teams.every((team) => womenInTeam(list(), team).length <= 2));
+});
+
+test("random rule allows a second woman and still reserves a setter and the first woman", async () => {
+  const waiting = [matchPlayer("s", "male", true), matchPlayer("w1", "female"),
+    matchPlayer("m1"), matchPlayer("m2"), matchPlayer("m3")];
+  const { api, list } = await harness(randomTeamsFixture(waiting));
+  const added = await api.addVolleyMatchPlayer({ listId: "day", userData: {
+    id: "guest-woman", ...user("guest-woman", "guest"), sex: "female",
+  } });
+  assert.ok(list().teams[2].players.includes(added.entryId));
+  assert.equal(womenInTeam(list(), list().teams[2]).length, 2);
+
+  const reserved = await harness(randomTeamsFixture(Array.from({ length: 4 }, (_, i) => matchPlayer(`m${i}`))));
+  const man = await reserved.api.addVolleyMatchPlayer({ listId: "day", userData: { id: "extra", ...user("extra") } });
+  assert.equal(reserved.list().teams[2].players.includes(man.entryId), false);
+});
+
+test("loser redistribution never adds a third woman to an automatic random team", async () => {
+  const waiting = [matchPlayer("s", "male", true), matchPlayer("w1", "female"),
+    matchPlayer("w2", "female"), matchPlayer("m1"), matchPlayer("m2")];
+  const loser = Array.from({ length: 6 }, (_, i) => matchPlayer(`lost-${i}`, "female", false, i === 0 ? "guest" : "member"));
+  const { api, list } = await harness(randomTeamsFixture(waiting, loser));
+  await api.recordTeamWin({ listId: "day", winningTeamIndex: 0 });
+  assert.ok(list().teams.every((team) => womenInTeam(list(), team).length <= 2));
+  const ids = list().teams.flatMap((team) => team.players);
+  assert.equal(ids.length, 17);
+  assert.equal(new Set(ids).size, 17);
+  assert.ok(loser.every((p) => ids.includes(p.entryId)));
+});
+
+test("initial random draw enforces at most two women; impossible first twelve stay intact", async () => {
+  for (const women of [2, 3, 4, 5]) {
+    const players = [matchPlayer("s1", "male", true), matchPlayer("s2", "male", true),
+      ...Array.from({ length: women }, (_, i) => matchPlayer(`w${i}`, "female", false, i === 0 ? "guest" : "member")),
+      ...Array.from({ length: 10 - women }, (_, i) => matchPlayer(`m${i}`))];
+    const { api, list } = await harness({ status: "in_progress", womenRuleMode: "random", matchPlayers: players, teams: [] });
+    if (women === 5) {
+      await assert.rejects(api.formInitialVolleyTeams({ listId: "day" }), /Nao foi possivel/);
+      assert.equal(list().teams.length, 0);
+      assert.equal(list().matchPlayers.length, 12);
+    } else {
+      await api.formInitialVolleyTeams({ listId: "day" });
+      for (const team of list().teams) {
+        assert.equal(team.players.length, 6);
+        assert.ok(womenInTeam(list(), team).length >= 1);
+        assert.ok(womenInTeam(list(), team).length <= 2);
+      }
+    }
+  }
+});
+
+test("female temporary setter keeps her role without consuming the random female quota", async () => {
+  const waiting = [matchPlayer("temp", "female"), matchPlayer("w1", "female"),
+    matchPlayer("w2", "female"), matchPlayer("m1"), matchPlayer("m2")];
+  const fixture = randomTeamsFixture(waiting);
+  fixture.teams[2].temporarySetterEntryId = "temp";
+  const { api, list } = await harness(fixture);
+  const added = await api.addVolleyMatchPlayer({ listId: "day", userData: { id: "man", ...user("man") } });
+  assert.ok(list().teams[2].players.includes(added.entryId));
+  assert.equal(list().teams[2].temporarySetterEntryId, "temp");
+});
+
+test("manual admin swaps can still place a third woman in a team", async () => {
+  const waiting = [matchPlayer("s", "male", true), matchPlayer("w1", "female"),
+    matchPlayer("w2", "female"), matchPlayer("m1"), matchPlayer("m2")];
+  const { api, list } = await harness(randomTeamsFixture(waiting));
+  await api.swapMatchPlayers({ listId: "day", firstEntryId: "winner-w", secondEntryId: "m1" });
+  assert.equal(womenInTeam(list(), list().teams[2]).length, 3);
+});
 
 test("legacy guests are separated without mutating the list or losing setter flags", () => {
   const legacy = { setters: [person("s"), person("gs", "guest")], players: [person("p"), person("gp", "guest")] };

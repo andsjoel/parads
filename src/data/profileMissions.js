@@ -11,10 +11,18 @@ function mission(category, threshold, reward, description) {
 const oddMatches = Array.from({ length: 25 }, (_, index) => index * 2 + 1);
 const progressive = Array.from({ length: 49 }, (_, index) => index + 2);
 const attendance = Array.from({ length: 50 }, (_, index) => index + 1);
-export const sequenceMilestones = [2, 5, 10, 15, 20];
+const sequenceRewards = { 2: 1, 3: 1, 4: 1, 5: 2, 6: 2, 7: 3, 8: 3, 9: 4, 10: 5 };
+const legacySequenceRewards = { 2: 1, 5: 2, 10: 3, 15: 4, 20: 5 };
+export const sequenceMilestones = Object.keys(sequenceRewards).map(Number);
 
 export function getSequenceReward(threshold) {
-  return sequenceMilestones.indexOf(threshold) + 1;
+  return sequenceRewards[threshold] || legacySequenceRewards[threshold] || 0;
+}
+
+export function getClaimedSequenceRewardAmount(stats, threshold) {
+  const amount = stats.claimedSequenceRewardAmounts?.[threshold];
+  if (Number.isSafeInteger(amount) && amount >= 0) return amount;
+  return (stats.claimedSequenceMilestoneHits?.[threshold] || 0) * (legacySequenceRewards[threshold] || 0);
 }
 
 export const profileMissions = {
@@ -95,15 +103,24 @@ export function getPendingSequenceRewards(stats = {}) {
   const hits = stats.sequenceMilestoneHits || {};
   const claimedHits = stats.claimedSequenceMilestoneHits || {};
 
-  return sequenceMilestones.map((threshold) => {
+  return getSequenceMissions(stats).map(({ threshold }) => {
     const earnedCount = hits[threshold] || 0;
     const claimedCount = claimedHits[threshold] || 0;
     const pendingCount = Math.max(0, earnedCount - claimedCount);
+    const claimedAmount = getClaimedSequenceRewardAmount(stats, threshold);
     return {
       threshold,
       pendingCount,
       reward: getSequenceReward(threshold),
-      totalReward: pendingCount * getSequenceReward(threshold),
+      totalReward: Math.max(0, earnedCount * getSequenceReward(threshold) - claimedAmount),
     };
-  }).filter((item) => item.pendingCount > 0);
+  }).filter((item) => item.totalReward > 0);
+}
+
+export function getSequenceMissions(stats = {}) {
+  // Honor already earned legacy milestones without issuing them for new games.
+  const legacy = [15, 20].filter((threshold) => stats.sequenceMilestoneHits?.[threshold] > 0);
+  return [...profileMissions.currentStreak, ...legacy.map((threshold) =>
+    mission("currentStreak", threshold, getSequenceReward(threshold), `Vença ${threshold} partidas seguidas.`),
+  )];
 }
