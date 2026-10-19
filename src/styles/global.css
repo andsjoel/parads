@@ -2895,6 +2895,34 @@
   background: linear-gradient(140deg, rgba(255, 113, 63, 0.1), transparent 42%), rgba(25, 5, 10, 0.97);
 }
 
+.feed-report-card {
+  --feed-card-border: rgba(255, 138, 46, 0.9);
+  --feed-card-tint: rgba(255, 138, 46, 0.1);
+  border: 0;
+  background: transparent;
+  clip-path: polygon(2% 1%, 97% 0, 100% 7%, 98% 93%, 94% 100%, 3% 98%, 0 90%, 1% 7%);
+}
+
+.feed-report-card::before,
+.feed-report-card::after {
+  position: absolute;
+  content: "";
+  pointer-events: none;
+  clip-path: inherit;
+}
+
+.feed-report-card::before {
+  z-index: -2;
+  inset: 0;
+  background: var(--feed-card-border);
+}
+
+.feed-report-card::after {
+  z-index: -1;
+  inset: 1.5px;
+  background: linear-gradient(145deg, var(--feed-card-tint), transparent 44%), rgba(22, 4, 9, 0.96);
+}
+
 .report-metric,
 .feed-report-metric {
   display: flex;
@@ -3057,8 +3085,8 @@
 }
 
 .feed-report-card--wins {
-  border-color: rgba(247, 189, 55, 0.58);
-  background: linear-gradient(140deg, rgba(247, 189, 55, 0.13), transparent 45%), rgba(25, 5, 10, 0.95);
+  --feed-card-border: rgba(247, 189, 55, 0.9);
+  --feed-card-tint: rgba(247, 189, 55, 0.13);
 }
 
 .admin-volley-player {
