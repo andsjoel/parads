@@ -25,10 +25,17 @@ async function createHarness() {
   };
   const mocks = {
     "firebase/firestore": firestore,
+    "../utils/publicProfileCache": { invalidatePublicProfileCache() {} },
     "../firebase/firebase": { db: {}, auth: {} },
     "firebase/auth": { signOut: async () => {} },
     "../utils/authEmail": { buildAuthEmail: (username) => `${username}@parads.local` },
     "../data/economy": { INITIAL_COIN_BALANCE: 5 },
+    "./accessGatewayService": {
+      requestAccess: async ({ action, username }) => {
+        assert.equal(action, "login");
+        return { authEmail: documents.get(`usernames/${username}`)?.authEmail || `${username}@parads.local` };
+      },
+    },
     "./accessCodeService": {
       generateAccessCode: () => "123456",
       generateAccessCodeSalt: () => "salt",

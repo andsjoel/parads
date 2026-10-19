@@ -1,13 +1,11 @@
 /* eslint-disable react/prop-types, react-refresh/only-export-components */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { onAuthStateChanged, signOut } from "firebase/auth";
-import { doc, onSnapshot, serverTimestamp, updateDoc } from "firebase/firestore";
+import { doc, onSnapshot } from "firebase/firestore";
 import { auth, db } from "../firebase/firebase";
-import { clearSessionData, preloadUserSession } from "../services/sessionDataService";
-import {
-  syncAllPublicProfilesOnce,
-  syncOwnPublicProfile,
-} from "../services/publicProfileService";
+import { clearSessionData, preloadUserSession, updateCachedSession } from "../services/sessionDataService";
+import { syncOwnPublicProfile } from "../services/publicProfileService";
+import { setPublicProfileCacheScope } from "../utils/publicProfileCache";
 
 const AuthContext = createContext(null);
 
@@ -17,15 +15,17 @@ function wait(milliseconds) {
   });
 }
 
-async function getUserSessionWithRetry(uid) {
+async function getUserSessionWithRetry(uid, isCurrent) {
   const delays = [0, 250, 500, 1000, 1500];
 
   for (const delay of delays) {
     if (delay) {
       await wait(delay);
     }
+    if (!isCurrent()) return null;
 
     const session = await preloadUserSession(uid);
+    if (!isCurrent()) return null;
     if (session) return session;
   }
 
@@ -39,14 +39,20 @@ export function AuthProvider({ children }) {
   const [loadingAuth, setLoadingAuth] = useState(true);
 
   const updateSessionData = useCallback((changes) => {
+    updateCachedSession(auth.currentUser?.uid, changes);
     setSessionData((current) => (current ? { ...current, ...changes } : current));
     if (changes.user) setUserData(changes.user);
   }, []);
 
   useEffect(() => {
+    let generation = 0;
+    let mounted = true;
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      const request = ++generation;
+      const current = () => mounted && generation === request && auth.currentUser === firebaseUser;
       try {
         setLoadingAuth(true);
+        setPublicProfileCacheScope(firebaseUser?.uid || null);
 
         if (!firebaseUser) {
           clearSessionData();
@@ -56,28 +62,20 @@ export function AuthProvider({ children }) {
           return;
         }
 
-        let session = await getUserSessionWithRetry(firebaseUser.uid);
+        // First access establishes membership after Auth creates the identity.
+        // Do not bootstrap or sign out that temporary session mid-registration.
+        if (window.location.pathname.replace(/\/$/, "") === "/register") return;
+
+        const session = await getUserSessionWithRetry(firebaseUser.uid, current);
+        if (!current()) return;
 
         if (!session) {
           console.warn("Usuário autenticado, mas sem registro no Firestore.");
-          await signOut(auth);
-
           setUserAuth(null);
           setUserData(null);
+          setSessionData(null);
+          await signOut(auth);
           return;
-        }
-
-        const isLegacyAdmin = session.user.type === "admin" || session.user.role === "admin";
-        if (isLegacyAdmin && (session.user.type !== "admin" || session.user.role !== "admin")) {
-          await updateDoc(doc(db, "users", firebaseUser.uid), {
-            type: "admin",
-            role: "admin",
-            updatedAt: serverTimestamp(),
-          });
-          session = {
-            ...session,
-            user: { ...session.user, type: "admin", role: "admin" },
-          };
         }
 
         setUserAuth(firebaseUser);
@@ -89,26 +87,20 @@ export function AuthProvider({ children }) {
         syncOwnPublicProfile(session.user).catch((error) => {
           console.warn("Nao foi possivel sincronizar o perfil publico:", error);
         });
-
-        const accountType = session.user.type || session.user.role;
-        if (accountType === "admin" || session.user.role === "admin") {
-          syncAllPublicProfilesOnce().catch((error) => {
-            console.warn("Nao foi possivel atualizar os perfis publicos:", error);
-          });
-        }
       } catch (error) {
+        if (!current()) return;
         console.error("Erro ao carregar usuário logado:", error);
 
-        await signOut(auth);
         setUserAuth(null);
         setUserData(null);
         setSessionData(null);
+        await signOut(auth);
       } finally {
-        setLoadingAuth(false);
+        if (current()) setLoadingAuth(false);
       }
     });
 
-    return unsubscribe;
+    return () => { mounted = false; generation += 1; unsubscribe(); };
   }, []);
 
   useEffect(() => {
@@ -117,6 +109,7 @@ export function AuthProvider({ children }) {
       try {
         if (auth.currentUser !== userAuth) return;
         const security = snapshot.exists() ? snapshot.data() : null;
+        updateCachedSession(userAuth.uid, { security });
         setSessionData((current) => current ? { ...current, security } : current);
         if (security?.invalidBefore) {
           const token = await userAuth.getIdTokenResult();
@@ -136,7 +129,8 @@ export function AuthProvider({ children }) {
     return onSnapshot(
       doc(db, "user_stats", userAuth.uid),
       (statsSnap) => {
-        if (!statsSnap.exists()) return;
+        if (!statsSnap.exists() || auth.currentUser?.uid !== userAuth.uid) return;
+        updateCachedSession(userAuth.uid, { stats: statsSnap.data() });
         setSessionData((current) => current
           ? { ...current, stats: statsSnap.data() }
           : current);

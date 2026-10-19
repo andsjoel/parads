@@ -1,5 +1,6 @@
 import { createHash, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
 import { Buffer } from "node:buffer";
+import { hasGroupMembership } from "./groupMembership.js";
 
 export class RecoveryError extends Error {
   constructor(status, message) {
@@ -10,6 +11,14 @@ export class RecoveryError extends Error {
 
 export const hashPassword = (password) => createHash("sha256").update(password).digest("hex");
 
+export function validateRecoveryPayload(body) {
+  if (!body || typeof body !== "object" || Array.isArray(body)) throw new RecoveryError(400, "Solicitação inválida.");
+  const field = body.action === "reset" ? "inviteId" : body.action === "complete" ? "password" : null;
+  if (!field || Object.keys(body).some((key) => key !== "action" && key !== field)) throw new RecoveryError(400, "Operação inválida.");
+  if (body.action === "reset" && (typeof body.inviteId !== "string" || !/^\d{10,15}$/.test(body.inviteId))) throw new RecoveryError(400, "Convite inválido.");
+  if (body.action === "complete" && (typeof body.password !== "string" || !/^\d{8}$/.test(body.password))) throw new RecoveryError(400, "A nova senha deve ter 8 números.");
+}
+
 export function createPasswordRecovery({ auth, store, now = Date.now, generatePassword = () => String(randomInt(100_000_000)).padStart(8, "0"), wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms)) }) {
   async function waitForNewLogin(second) {
     const delay = (second + 1) * 1000 - now() + 100;
@@ -17,14 +26,14 @@ export function createPasswordRecovery({ auth, store, now = Date.now, generatePa
   }
 
   return {
-    async reset(actorUid, inviteId) {
+    async reset(actorUid, inviteId, actorAuthTime) {
       if (typeof inviteId !== "string" || !/^\d{10,15}$/.test(inviteId)) {
         throw new RecoveryError(400, "Convite inválido.");
       }
       const password = generatePassword();
       const resetId = randomUUID();
       const invalidBefore = Math.floor(now() / 1000);
-      const context = await store.prepareReset({ actorUid, inviteId, resetId, invalidBefore, temporaryHash: hashPassword(password), now: now() });
+      const context = await store.prepareReset({ actorUid, actorAuthTime, inviteId, resetId, invalidBefore, temporaryHash: hashPassword(password), now: now() });
       let passwordUpdated = false;
       try {
         await auth.updateUser(context.uid, { password });
@@ -64,11 +73,15 @@ export function createRecoveryStore(db, fieldValue) {
   const security = (uid) => db.collection("account_security").doc(uid);
   const audit = (id) => db.collection("password_reset_audit").doc(id);
   return {
-    prepareReset: ({ actorUid, inviteId, resetId, invalidBefore, temporaryHash, now }) => db.runTransaction(async (transaction) => {
+    prepareReset: ({ actorUid, actorAuthTime, inviteId, resetId, invalidBefore, temporaryHash, now }) => db.runTransaction(async (transaction) => {
       const actor = await transaction.get(db.collection("users").doc(actorUid));
       const actorSecurity = await transaction.get(security(actorUid));
-      if (actor.data()?.role !== "admin" || actorSecurity.data()?.passwordChangeRequired) {
+      if ((actor.data()?.role || actor.data()?.type) !== "admin" || actorSecurity.data()?.passwordChangeRequired ||
+        !(await hasGroupMembership(db, (ref) => transaction.get(ref), actorUid, actor.data()))) {
         throw new RecoveryError(403, "Apenas administradores podem redefinir senhas.");
+      }
+      if (actorAuthTime !== undefined && (!Number.isFinite(actorAuthTime) || actorAuthTime <= (actorSecurity.data()?.invalidBefore || 0))) {
+        throw new RecoveryError(401, "Entre novamente para continuar.");
       }
       const invite = await transaction.get(db.collection("pre_registered_users").doc(inviteId));
       if (!invite.data()?.claimed || !invite.data()?.userId) {
@@ -91,7 +104,7 @@ export function createRecoveryStore(db, fieldValue) {
         createdAt: fieldValue.serverTimestamp(),
       });
       return { uid, fullName: user.data().fullName, previous: previous.exists ? previous.data() : null };
-    }),
+    }, { maxAttempts: 2 }),
     async markReady(uid, resetId, invalidBefore) {
       const batch = db.batch();
       batch.update(security(uid), { resetState: "ready", invalidBefore });
@@ -106,9 +119,13 @@ export function createRecoveryStore(db, fieldValue) {
         else if (context.previous) transaction.set(security(context.uid), context.previous);
         else transaction.delete(security(context.uid));
         transaction.update(audit(resetId), { status: "failed", temporaryHash: fieldValue.delete() });
-      });
+      }, { maxAttempts: 2 });
     },
     prepareCompletion: ({ uid, authTime, temporaryHash }) => db.runTransaction(async (transaction) => {
+      const user = await transaction.get(db.collection("users").doc(uid));
+      if (!(await hasGroupMembership(db, (ref) => transaction.get(ref), uid, user.data()))) {
+        throw new RecoveryError(403, "Conta sem vinculo ativo com o grupo.");
+      }
       const current = await transaction.get(security(uid));
       const state = current.data();
       if (!state?.passwordChangeRequired || state.resetState !== "ready") {
@@ -122,7 +139,7 @@ export function createRecoveryStore(db, fieldValue) {
       }
       transaction.update(security(uid), { resetState: "updating" });
       return state.resetId;
-    }),
+    }, { maxAttempts: 2 }),
     async complete(uid, resetId, invalidBefore) {
       const batch = db.batch();
       batch.update(security(uid), {
@@ -138,7 +155,7 @@ export function createRecoveryStore(db, fieldValue) {
         if (current.data()?.resetId === resetId && current.data()?.resetState === "updating") {
           transaction.update(security(uid), { resetState: "ready" });
         }
-      });
+      }, { maxAttempts: 2 });
     },
   };
 }

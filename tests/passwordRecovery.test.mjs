@@ -23,9 +23,10 @@ function harness() {
   let clock = 2_000_000;
   const deleted = Symbol("deleted");
   const documents = new Map([
-    ["users/admin", { role: "admin" }],
+    ["users/admin", { role: "admin", phone: "5561999999999" }],
+    ["pre_registered_users/5561999999999", { role: "admin", enabled: true, claimed: true, userId: "admin", phone: "5561999999999" }],
     ["users/member", { role: "member", fullName: "Member", phone: "5561999990000", progression: { coins: 42 } }],
-    ["pre_registered_users/5561999990000", { claimed: true, userId: "member", phone: "5561999990000" }],
+    ["pre_registered_users/5561999990000", { role: "member", enabled: true, claimed: true, userId: "member", phone: "5561999990000" }],
     ["user_stats/member", { wins: 7 }],
     ["user_inventory/member", { displayCards: ["display-card-shiny"] }],
   ]);
@@ -76,6 +77,16 @@ test("a member cannot reset someone else's password", async () => {
   await assert.rejects(service.reset("member", "5561999990000"), { status: 403 });
   assert.equal(authCalls.length, 0);
   assert.equal(documents.has("account_security/member"), false);
+});
+
+test("an admin without an enabled invitation cannot use the Admin SDK recovery path", async () => {
+  for (const disabled of [true, false]) {
+    const { service, documents, authCalls } = harness();
+    if (disabled) documents.get("pre_registered_users/5561999999999").enabled = false;
+    else documents.delete("pre_registered_users/5561999999999");
+    await assert.rejects(service.reset("admin", "5561999990000"), { status: 403 });
+    assert.equal(authCalls.length, 0);
+  }
 });
 
 test("admin reset produces eight digits, revokes sessions and preserves all profile data", async () => {

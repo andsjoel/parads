@@ -8,9 +8,12 @@ import {
 
 import { db } from "../firebase/firebase";
 import { INITIAL_COIN_BALANCE } from "../data/economy";
+import { requestAccess } from "./accessGatewayService";
+import { invalidatePublicProfileCache } from "../utils/publicProfileCache";
 
-export async function isUsernameAvailable(username) {
+export async function isUsernameAvailable(username, ticket = null) {
   const cleanUsername = username.trim().toLowerCase();
+  if (ticket) return (await requestAccess({ action: "username", username: cleanUsername, ticket })).available;
   const usernameRef = doc(db, "usernames", cleanUsername);
   const usernameSnap = await getDoc(usernameRef);
 
@@ -57,6 +60,7 @@ export async function deleteUserCascadeByPreRegister(preRegisterId) {
   }
 
   await batch.commit();
+  invalidatePublicProfileCache(uid);
 }
 
 export async function createUserBaseData({ uid, preRegister, username, authEmail }) {
@@ -80,6 +84,7 @@ export async function createUserBaseData({ uid, preRegister, username, authEmail
   const preRegisterRef = doc(db, "pre_registered_users", preRegister.id);
 
   batch.set(userRef, {
+    inviteId: preRegister.id,
     phone: preRegister.phone,
     fullName: preRegister.fullName,
     username: cleanUsername,
@@ -203,7 +208,7 @@ async function activateGuestBaseData({ uid, preRegister, username, authEmail }) 
     }
     if (usernameSnap.exists()) throw new Error("Esse usuário já está em uso.");
     const user = userSnap.data();
-    const changes = { username, authEmail, firstAccessPending: false, updatedAt: serverTimestamp() };
+    const changes = { username, authEmail, inviteId: preRegister.id, firstAccessPending: false, updatedAt: serverTimestamp() };
     transaction.update(userRef, changes);
     transaction.set(doc(db, "public_profiles", uid), {
       fullName: user.fullName, username, profile: user.profile,

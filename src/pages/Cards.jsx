@@ -52,10 +52,12 @@ export default function Cards() {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    let current = true;
     getPublicProfileDirectory()
-      .then(setMembers)
-      .catch(() => setError("Não foi possível carregar os atletas."))
-      .finally(() => setIsLoadingDirectory(false));
+      .then((directory) => { if (current) setMembers(directory || []); })
+      .catch(() => { if (current) setError("Não foi possível carregar os atletas."); })
+      .finally(() => { if (current) setIsLoadingDirectory(false); });
+    return () => { current = false; selectionRequestRef.current += 1; };
   }, []);
 
   useEffect(() => {
@@ -95,7 +97,7 @@ export default function Cards() {
     setLoadingMemberId(member.id);
 
     try {
-      const bundle = await getPublicProfileBundle(member.id);
+      const bundle = await getPublicProfileBundle(member.id, { force: true });
       if (!bundle?.user || !bundle?.inventory || !bundle?.stats) {
         throw new Error("Perfil incompleto ou removido.");
       }

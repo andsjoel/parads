@@ -3,14 +3,24 @@ import {
   doc,
   getDoc,
   getDocs,
+  query,
+  where,
+  limit,
+  documentId,
   serverTimestamp,
   setDoc,
   writeBatch,
 } from "firebase/firestore";
 
 import { db } from "../firebase/firebase";
+import { rememberPublicProfile } from "../utils/publicProfileCache";
 
-export async function getPublicProfileBundle(userId) {
+export function getPublicProfileBundle(userId, options) {
+  if (!userId) return Promise.resolve(null);
+  return rememberPublicProfile(`bundle:${userId}`, () => loadPublicProfileBundle(userId), options);
+}
+
+async function loadPublicProfileBundle(userId) {
   const userRef = doc(db, "public_profiles", userId);
   const inventoryRef = doc(db, "user_inventory", userId);
   const statsRef = doc(db, "user_stats", userId);
@@ -45,7 +55,7 @@ export async function getPublicProfileBundle(userId) {
 export async function getPublicProfileBundles(userIds) {
   const uniqueUserIds = [...new Set(userIds.filter(Boolean))];
   const results = await Promise.allSettled(
-    uniqueUserIds.map(getPublicProfileBundle),
+    uniqueUserIds.map((id) => getPublicProfileBundle(id)),
   );
 
   return results.reduce((profilesById, result) => {
@@ -64,12 +74,33 @@ export async function getPublicProfileBundles(userIds) {
   }, {});
 }
 
-export async function getPublicProfileDirectory() {
-  const [profilesSnapshot, inventorySnapshot] = await Promise.all([
-    getDocs(collection(db, "public_profiles")),
-    getDocs(collection(db, "user_inventory")),
-  ]);
-  const activeUserIds = new Set(inventorySnapshot.docs.map((item) => item.id));
+export async function getPublicProfilePreviews(userIds) {
+  const results = await Promise.allSettled([...new Set(userIds.filter(Boolean))].map((id) =>
+    rememberPublicProfile(`preview:${id}`, async () => {
+      const snapshot = await getDoc(doc(db, "public_profiles", id));
+      return snapshot.exists() ? { user: { id: snapshot.id, ...snapshot.data() } } : null;
+    }, { ttl: 60000 }),
+  ));
+  return Object.fromEntries(results.flatMap((result) =>
+    result.status === "fulfilled" && result.value?.user?.id
+      ? [[result.value.user.id, result.value]] : [],
+  ));
+}
+
+export function getPublicProfileDirectory() {
+  return rememberPublicProfile("directory", loadPublicProfileDirectory, { ttl: 30000 });
+}
+
+async function loadPublicProfileDirectory() {
+  const profilesSnapshot = await getDocs(collection(db, "public_profiles"));
+  const ids = profilesSnapshot.docs.map((item) => item.id);
+  const activeUserIds = new Set();
+  // Preserve orphan filtering without scanning inventories unrelated to the directory.
+  for (let index = 0; index < ids.length; index += 30) {
+    const snapshot = await getDocs(query(collection(db, "user_inventory"),
+      where(documentId(), "in", ids.slice(index, index + 30))));
+    snapshot.docs.forEach((item) => activeUserIds.add(item.id));
+  }
 
   return profilesSnapshot.docs
     .filter((profileDoc) => activeUserIds.has(profileDoc.id))
@@ -84,12 +115,31 @@ export async function getPublicProfileDirectory() {
     });
 }
 
+export function getGuideAdminProfile(selfBundle) {
+  if (selfBundle?.inventory && selfBundle?.stats
+    && (selfBundle.user?.role === "admin" || selfBundle.user?.type === "admin")) {
+    return Promise.resolve(selfBundle);
+  }
+  return rememberPublicProfile("guide-admin", async () => {
+    // The role query is normally sufficient; type also supports legacy accounts.
+    for (const field of ["role", "type"]) {
+      const snapshot = await getDocs(query(collection(db, "public_profiles"),
+        where(field, "==", "admin"), limit(10)));
+      for (const item of snapshot.docs) {
+        const bundle = await getPublicProfileBundle(item.id);
+        if (bundle) return bundle;
+      }
+    }
+    return null;
+  });
+}
+
 function getPublicUserPayload(user) {
   return {
     fullName: user.fullName || "Jogador",
     username: user.username || "",
     type: user.type || "member",
-    role: user.role || "member",
+    role: user.role || user.type || "member",
     sex: user.sex || "male",
     profile: user.profile || {},
     progression: {

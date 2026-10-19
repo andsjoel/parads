@@ -1,12 +1,11 @@
 import { signOut } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
-import { auth, db } from "../firebase/firebase";
-import { buildAuthEmail } from "../utils/authEmail";
+import { auth } from "../firebase/firebase";
+import { requestAccess } from "./accessGatewayService";
 
 export async function resolveLoginEmail(username) {
   const cleanUsername = username.trim().toLowerCase();
-  const snapshot = await getDoc(doc(db, "usernames", cleanUsername));
-  return snapshot.data()?.authEmail || buildAuthEmail(cleanUsername);
+  const result = await requestAccess({ action: "login", username: cleanUsername });
+  return result.authEmail;
 }
 
 export async function logoutUser() {

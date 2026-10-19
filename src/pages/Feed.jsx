@@ -1,5 +1,5 @@
 /* eslint-disable react/prop-types */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { BarChart3, CalendarDays, ClipboardList, Gamepad2, MessageCircle, Palette, Store, Target, Trophy, User } from "lucide-react";
 import { GiVolleyballBall } from "react-icons/gi";
 
@@ -11,12 +11,8 @@ import {
   ProfileStickerModal,
 } from "../components/profile/ProfileCardPreview";
 import { useAuth } from "../contexts/AuthContext";
-import {
-  getPublicProfileBundle,
-  getPublicProfileBundles,
-  getPublicProfileDirectory,
-  syncAllPublicProfilesOnce,
-} from "../services/publicProfileService";
+import { getGuideAdminProfile } from "../services/publicProfileService";
+import { usePublicProfilePreviews, useSelectedPublicProfile } from "../hooks/usePublicProfiles";
 import { subscribeFeedPosts } from "../services/volleyReportService";
 import { buildMockProfileBundle } from "../services/volleyListService";
 
@@ -27,22 +23,14 @@ function formatDate(value) {
 }
 
 export default function Feed() {
-  const { isAdmin } = useAuth();
+  const { userData, sessionData } = useAuth();
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [profilesById, setProfilesById] = useState({});
   const [selectedPerson, setSelectedPerson] = useState(null);
-  const [loadingProfileId, setLoadingProfileId] = useState("");
-  const [publicProfilesRevision, setPublicProfilesRevision] = useState(0);
   const [guideAdmin, setGuideAdmin] = useState(null);
-
-  useEffect(() => {
-    if (!isAdmin) return;
-
-    syncAllPublicProfilesOnce()
-      .catch((error) => console.warn("Nao foi possivel atualizar os perfis publicos:", error))
-      .finally(() => setPublicProfilesRevision((current) => current + 1));
-  }, [isAdmin]);
+  const selfBundle = useMemo(() => userData?.id ? {
+    user: userData, inventory: sessionData?.inventory, stats: sessionData?.stats,
+  } : null, [userData, sessionData?.inventory, sessionData?.stats]);
 
   useEffect(() => subscribeFeedPosts({
     onChange: (nextPosts) => {
@@ -55,9 +43,9 @@ export default function Feed() {
     },
   }), []);
 
-  useEffect(() => {
+  const snapshotProfiles = useMemo(() => {
     const rankingItems = posts.flatMap((post) => post.payload?.ranking || []);
-    const snapshotProfiles = rankingItems.reduce((result, item, index) => {
+    return rankingItems.reduce((result, item, index) => {
       if (!item.userId) return result;
       if (item.profileBundle) {
         return { ...result, [item.userId]: item.profileBundle };
@@ -75,63 +63,41 @@ export default function Feed() {
       }
       return result;
     }, {});
-    const remoteIds = [...new Set(rankingItems.map((item) => item.userId).filter(Boolean))]
-      .filter((id) => !snapshotProfiles[id]);
-
-    setProfilesById((current) => ({ ...snapshotProfiles, ...current }));
-    if (!remoteIds.length) return;
-
-    getPublicProfileBundles(remoteIds)
-      .then((bundles) => setProfilesById((current) => ({ ...current, ...bundles })))
-      .catch((error) => console.error(error));
-  }, [posts, publicProfilesRevision]);
+  }, [posts]);
+  const profileIds = posts.flatMap((post) => post.payload?.ranking || []).map((item) => item.userId);
+  const profilesById = usePublicProfilePreviews(profileIds, { selfBundle, embedded: snapshotProfiles });
+  const selectedProfile = useSelectedPublicProfile(selectedPerson?.id,
+    selectedPerson?.id === userData?.id ? selfBundle : snapshotProfiles[selectedPerson?.id]);
 
   useEffect(() => {
     if (loading || posts.length || guideAdmin) return undefined;
 
     let isCurrent = true;
-    getPublicProfileDirectory()
-      .then((members) => {
-        const admin = members.find((member) => member.role === "admin" || member.type === "admin");
-        if (!admin) return null;
-        return getPublicProfileBundle(admin.id).then((bundle) => ({ admin, bundle }));
-      })
-      .then((result) => {
-        if (!isCurrent || !result?.bundle) return;
+    getGuideAdminProfile(selfBundle)
+      .then((bundle) => {
+        if (!isCurrent || !bundle) return;
         const entry = {
-          userId: result.admin.id,
-          displayName: result.bundle.user?.profile?.displayName
-            || result.bundle.user?.fullName
+          userId: bundle.user.id,
+          profileBundle: bundle,
+          displayName: bundle.user?.profile?.displayName
+            || bundle.user?.fullName
             || "ADM",
         };
         setGuideAdmin(entry);
-        setProfilesById((current) => ({
-          ...current,
-          [entry.userId]: result.bundle,
-        }));
       })
       .catch((error) => console.warn("Não foi possível carregar o perfil do ADM:", error));
 
     return () => {
       isCurrent = false;
     };
-  }, [guideAdmin, loading, posts.length]);
+  }, [guideAdmin, loading, posts.length, selfBundle]);
 
-  async function openProfile(item) {
+  function openProfile(item) {
     if (!item.userId) return;
     setSelectedPerson({
       id: item.userId,
       name: item.displayName,
     });
-    if (profilesById[item.userId]) return;
-
-    try {
-      setLoadingProfileId(item.userId);
-      const bundles = await getPublicProfileBundles([item.userId]);
-      setProfilesById((current) => ({ ...current, ...bundles }));
-    } finally {
-      setLoadingProfileId("");
-    }
   }
 
   return (
@@ -146,7 +112,7 @@ export default function Feed() {
           {!loading && posts.length === 0 && (
             <MemberQuickGuide
               admin={guideAdmin}
-              adminBundle={guideAdmin ? profilesById[guideAdmin.userId] : null}
+              adminBundle={guideAdmin?.userId === userData?.id ? selfBundle : guideAdmin?.profileBundle}
               onOpenProfile={openProfile}
             />
           )}
@@ -165,9 +131,9 @@ export default function Feed() {
 
       {selectedPerson && (
         <ProfileStickerModal
-          profileBundle={profilesById[selectedPerson.id]}
+          profileBundle={selectedProfile.bundle}
           fallbackPerson={selectedPerson}
-          isLoading={loadingProfileId === selectedPerson.id}
+          isLoading={selectedProfile.loading}
           onClose={() => setSelectedPerson(null)}
         />
       )}

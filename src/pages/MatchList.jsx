@@ -21,7 +21,7 @@ import {
   PlayerMiniCard,
   ProfileStickerModal,
 } from "../components/profile/ProfileCardPreview";
-import { getPublicProfileBundles } from "../services/publicProfileService";
+import { usePublicProfilePreviews, useSelectedPublicProfile } from "../hooks/usePublicProfiles";
 import {
   joinVolleyList,
   leaveVolleyList,
@@ -335,11 +335,19 @@ export default function MatchList({ mode = "matches" }) {
   const [isLoading, setIsLoading] = useState(true);
   const [busyAction, setBusyAction] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
-  const [profilesById, setProfilesById] = useState({});
   const [selectedPerson, setSelectedPerson] = useState(null);
-  const [isLoadingProfile, setIsLoadingProfile] = useState(false);
   const [showFrozenList, setShowFrozenList] = useState(false);
   const presence = useMemo(() => getPresenceGroups(list), [list]);
+  const selfBundle = useMemo(() => userData?.id ? {
+    user: userData, inventory: sessionData?.inventory, stats: sessionData?.stats,
+  } : null, [userData, sessionData?.inventory, sessionData?.stats]);
+  const profileIds = [
+    ...((isPresenceMode || showFrozenList) ? Object.values(presence).flat().map((person) => person.id) : []),
+    ...(list?.matchPlayers || []).filter((person) => !person.removedAt).map((person) => person.userId),
+  ];
+  const profilesById = usePublicProfilePreviews(profileIds, { selfBundle, embedded: list?.mockProfiles });
+  const selectedProfile = useSelectedPublicProfile(selectedPerson?.id,
+    selectedPerson?.id === userData?.id ? selfBundle : list?.mockProfiles?.[selectedPerson?.id]);
 
   useEffect(() => {
     setIsLoading(true);
@@ -360,43 +368,6 @@ export default function MatchList({ mode = "matches" }) {
 
     return unsubscribe;
   }, []);
-
-  useEffect(() => {
-    async function loadProfiles() {
-      const ids = [
-        ...Object.values(presence).flat().map((person) => person.id),
-        ...(list?.matchPlayers || []).map((person) => person.userId),
-      ].filter(Boolean);
-      const mockProfiles = list?.mockProfiles || {};
-      const remoteIds = [...new Set(ids)].filter((id) => !mockProfiles[id]);
-
-      if (!ids.length) {
-        setProfilesById(mockProfiles);
-        return;
-      }
-
-      try {
-        const loadedProfiles = remoteIds.length
-          ? await getPublicProfileBundles(remoteIds)
-          : {};
-        const nextProfiles = { ...mockProfiles, ...loadedProfiles };
-
-        if (userData?.id && ids.includes(userData.id)) {
-          nextProfiles[userData.id] = {
-            user: userData,
-            inventory: sessionData?.inventory || null,
-            stats: sessionData?.stats || null,
-          };
-        }
-
-        setProfilesById(nextProfiles);
-      } catch (error) {
-        console.error(error);
-      }
-    }
-
-    loadProfiles();
-  }, [list, presence, sessionData?.inventory, sessionData?.stats, userData]);
 
   const isListOpen = list?.status === "open";
   const isInProgress = list?.status === "in_progress";
@@ -458,7 +429,7 @@ export default function MatchList({ mode = "matches" }) {
     );
   }
 
-  async function handleOpenProfile(person) {
+  function handleOpenProfile(person) {
     const userId = person.userId || person.id;
     if (!userId) return;
 
@@ -467,21 +438,6 @@ export default function MatchList({ mode = "matches" }) {
       name: person.displayName || person.name,
       username: person.username,
     });
-
-    if (profilesById[userId]) return;
-
-    try {
-      setIsLoadingProfile(true);
-      const nextProfilesById = await getPublicProfileBundles([userId]);
-      setProfilesById((current) => ({
-        ...current,
-        ...nextProfilesById,
-      }));
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setIsLoadingProfile(false);
-    }
   }
 
   if (isLoading) {
@@ -629,8 +585,8 @@ export default function MatchList({ mode = "matches" }) {
       {selectedPerson && (
         <ProfileStickerModal
           fallbackPerson={selectedPerson}
-          profileBundle={profilesById[selectedPerson.id]}
-          isLoading={isLoadingProfile && !profilesById[selectedPerson.id]}
+          profileBundle={selectedProfile.bundle}
+          isLoading={selectedProfile.loading}
           onClose={() => setSelectedPerson(null)}
         />
       )}

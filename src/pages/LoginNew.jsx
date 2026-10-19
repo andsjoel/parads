@@ -163,7 +163,9 @@ export default function LoginNew() {
         console.error(error);
         setHasPasswordError(true);
         setErrorMessage(
-          error.code === "auth/too-many-requests"
+          error.status
+            ? (error.status === 429 ? "Muitas tentativas. Aguarde um pouco." : error.message)
+            : error.code === "auth/too-many-requests"
             ? "muitas tentativas. aguarde um pouco."
             : "usuario ou senha invalidos.",
         );

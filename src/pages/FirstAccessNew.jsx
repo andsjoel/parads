@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   createUserWithEmailAndPassword,
-  deleteUser,
   signOut,
   signInWithEmailAndPassword,
   updatePassword,
@@ -15,6 +14,7 @@ import { auth } from "../firebase/firebase";
 import {
   findFirstAccessInvite,
   validateFirstAccessCode,
+  authorizeFirstAccess,
 } from "../services/firstAccessService";
 import {
   createUserBaseData,
@@ -233,7 +233,8 @@ export default function FirstAccessExperience() {
         console.error(error);
         if (active) {
           setPhoneWave(false);
-          setErrorMessage("Não encontramos seu convite.");
+          setErrorMessage(error.status && error.status !== 403
+            ? error.message : "Não encontramos seu convite.");
         }
       } finally {
         if (active) setLoading(false);
@@ -250,8 +251,9 @@ export default function FirstAccessExperience() {
     if (stage !== "code" || code.length !== 6 || codeCheckRef.current === code) return;
     codeCheckRef.current = code;
 
-    validateFirstAccessCode(invite, code).then((valid) => {
-      if (valid) {
+    validateFirstAccessCode(invite, code).then((authorization) => {
+      if (authorization.ticket) {
+        setInvite((current) => ({ ...current, ...authorization }));
         setErrorMessage("");
         window.setTimeout(() => setStage("username"), 300);
       } else {
@@ -261,6 +263,9 @@ export default function FirstAccessExperience() {
           setCode("");
         }, 550);
       }
+    }).catch((error) => {
+      setErrorMessage(error.message || "Não foi possível verificar o código.");
+      window.setTimeout(() => { codeCheckRef.current = ""; setCode(""); }, 550);
     });
   }, [code, invite, stage]);
 
@@ -321,37 +326,50 @@ export default function FirstAccessExperience() {
   async function createAccount() {
     if (!passwordConfirmed || loading) return;
     let credential = null;
-    let accountSaved = false;
     try {
       setLoading(true);
       setErrorMessage("");
       const authEmail = invite.pendingAuthEmail || buildAuthEmail(username);
       await signOut(auth);
       if (invite.pendingAuthEmail) {
-        credential = await signInWithEmailAndPassword(auth, invite.pendingAuthEmail, pendingGuestPassword(code));
-        await updatePassword(credential.user, password);
+        try {
+          credential = await signInWithEmailAndPassword(auth, invite.pendingAuthEmail, pendingGuestPassword(code));
+        } catch (error) {
+          if (!["auth/invalid-credential", "auth/wrong-password"].includes(error.code)) throw error;
+          credential = await signInWithEmailAndPassword(auth, invite.pendingAuthEmail, password);
+        }
       } else {
-        credential = await createUserWithEmailAndPassword(auth, authEmail, password);
+        try {
+          credential = await createUserWithEmailAndPassword(auth, authEmail, password);
+        } catch (error) {
+          if (error.code !== "auth/email-already-in-use") throw error;
+          credential = await signInWithEmailAndPassword(auth, authEmail, password);
+        }
       }
-      await createUserBaseData({ uid: credential.user.uid, preRegister: invite, username, authEmail });
-      accountSaved = true;
+      const authorization = await authorizeFirstAccess(invite, username, credential.user);
+      // Set the chosen password before consuming a guest invitation. If the
+      // commit response is lost, their ordinary login must still work.
+      if (invite.pendingAuthEmail) await updatePassword(credential.user, password);
+      if (!authorization.completed) {
+        await createUserBaseData({ uid: credential.user.uid, preRegister: invite, username, authEmail });
+      }
       await new Promise((resolve) => window.setTimeout(resolve, 2200));
       await signOut(auth);
       navigate("/login", { replace: true });
     } catch (error) {
       console.error(error);
-      if (credential?.user && !accountSaved) {
-        if (invite.pendingAuthEmail) {
-          await updatePassword(credential.user, pendingGuestPassword(code)).catch(() => {});
-          await signOut(auth).catch(() => {});
-        } else {
-          await deleteUser(credential.user).catch(() => {});
-        }
-      }
+      // A lost response is not proof that the account was not saved.
+      // Preserve the UID and data; a retry can finish the same registration.
+      await signOut(auth).catch(() => {});
       setLoading(false);
       setPasswordConfirmed(false);
       setConfirmation("");
-      setErrorMessage("Não foi possível criar sua conta.");
+      if (error.status === 403 || error.code === "permission-denied") {
+        codeCheckRef.current = "";
+        setCode("");
+        setStage("code");
+      }
+      setErrorMessage(error.status ? error.message : "Não foi possível concluir o cadastro. Tente novamente ou procure o ADM.");
     }
   }
 
@@ -360,11 +378,13 @@ export default function FirstAccessExperience() {
     try {
       setLoading(true);
       setErrorMessage("");
-      if (!(await isUsernameAvailable(username))) {
+      if (!(await isUsernameAvailable(username, invite.ticket))) {
         setErrorMessage("Esse usuário já está em uso.");
         return;
       }
       setStage("password");
+    } catch (error) {
+      setErrorMessage(error.message || "Não foi possível verificar o usuário.");
     } finally {
       setLoading(false);
     }

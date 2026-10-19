@@ -2,7 +2,7 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    function signedIn() {
+    function sessionAllowed() {
       return request.auth != null && (
         !exists(/databases/$(database)/documents/account_security/$(request.auth.uid))
         || (
@@ -10,6 +10,60 @@ service cloud.firestore {
           && request.auth.token.auth_time > get(/databases/$(database)/documents/account_security/$(request.auth.uid)).data.get('invalidBefore', 0)
         )
       );
+    }
+
+    function accountRole(user) {
+      let role = user.get('role', null);
+      return role == null || role == '' ? user.get('type', '') : role;
+    }
+
+    function linkedInvite(inviteId, user) {
+      let path = /databases/$(database)/documents/pre_registered_users/$(inviteId);
+      return exists(path)
+        && get(path).data.get('enabled', false) == true
+        && get(path).data.get('userId', '') == request.auth.uid
+        && accountRole(get(path).data) == accountRole(user)
+        && (get(path).data.get('claimed', false) == true || user.get('firstAccessPending', false) == true);
+    }
+
+    function groupMember() {
+      let path = /databases/$(database)/documents/users/$(request.auth.uid);
+      let user = get(path).data;
+      let phone = string(user.get('phone', ''));
+      let alternate = phone.size() == 13 ? phone[2:13] : '55' + phone;
+      let primary = user.get('inviteId', phone);
+      return exists(path)
+        && phone.matches('(55)?[0-9]{11}')
+        && accountRole(user) in ['admin', 'member', 'guest']
+        && (user.get('inviteId', null) != null || exists(/databases/$(database)/documents/pre_registered_users/$(primary))
+          ? linkedInvite(primary, user) : linkedInvite(alternate, user));
+    }
+
+    function signedIn() {
+      return request.auth != null && groupMember() && sessionAllowed();
+    }
+
+    function registering(userId) {
+      return ownsAccount(userId) && sessionAllowed()
+        && exists(/databases/$(database)/documents/registration_grants/$(userId))
+        && validGrant(userId);
+    }
+
+    function validGrant(userId) {
+      let grantPath = /databases/$(database)/documents/registration_grants/$(userId);
+      let grant = get(grantPath).data;
+      let invite = get(/databases/$(database)/documents/pre_registered_users/$(grant.inviteId)).data;
+      return grant.expiresAt > request.time
+        && invite.get('enabled', false) == true && invite.get('claimed', false) != true
+        && invite.get('userId', null) in [null, userId]
+        && invite.phone == grant.phone && accountRole(invite) == grant.role
+        && invite.accessCodeHash == grant.codeHash && invite.accessCodeSalt == grant.codeSalt;
+    }
+
+    function registrationIdentity(user) {
+      let grant = get(/databases/$(database)/documents/registration_grants/$(request.auth.uid)).data;
+      return user.phone == grant.phone && user.role == grant.role && user.type == grant.role && user.inviteId == grant.inviteId
+        && user.username == grant.username && user.authEmail == grant.authEmail;
     }
 
     function ownsAccount(userId) {
@@ -22,16 +76,19 @@ service cloud.firestore {
 
     function isAdmin() {
       return signedIn()
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
+        && accountRole(get(/databases/$(database)/documents/users/$(request.auth.uid)).data) == "admin";
     }
 
     match /pre_registered_users/{phone} {
-  allow read: if true;
+  allow read: if isAdmin() || (
+    request.auth != null && registering(request.auth.uid)
+    && get(/databases/$(database)/documents/registration_grants/$(request.auth.uid)).data.inviteId == phone
+  );
   allow create, delete: if isAdmin();
 
   allow update: if isAdmin() || (
-    signedIn()
+    registering(request.auth.uid)
+    && get(/databases/$(database)/documents/registration_grants/$(request.auth.uid)).data.inviteId == phone
     && resource.data.enabled == true
     && resource.data.claimed != true
     && request.resource.data.claimed == true
@@ -47,29 +104,37 @@ service cloud.firestore {
 }
 
     match /users/{userId} {
-      allow read: if ownsAccount(userId) || isAdmin();
+      allow read: if isAdmin() || (ownsAccount(userId) && (groupMember() || registering(userId)));
       allow create: if isAdmin() || (
-        isSelf(userId)
-        && get(/databases/$(database)/documents/pre_registered_users/$(request.resource.data.phone)).data.enabled == true
-        && get(/databases/$(database)/documents/pre_registered_users/$(request.resource.data.phone)).data.claimed != true
-        && request.resource.data.role == get(/databases/$(database)/documents/pre_registered_users/$(request.resource.data.phone)).data.role
-        && request.resource.data.type == request.resource.data.role
-        && getAfter(/databases/$(database)/documents/pre_registered_users/$(request.resource.data.phone)).data.userId == userId
-        && getAfter(/databases/$(database)/documents/pre_registered_users/$(request.resource.data.phone)).data.claimed == true
+        registering(userId) && registrationIdentity(request.resource.data)
+        && getAfter(/databases/$(database)/documents/pre_registered_users/$(get(/databases/$(database)/documents/registration_grants/$(userId)).data.inviteId)).data.userId == userId
+        && getAfter(/databases/$(database)/documents/pre_registered_users/$(get(/databases/$(database)/documents/registration_grants/$(userId)).data.inviteId)).data.claimed == true
       );
       allow update: if isAdmin() || (
         isSelf(userId)
-        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'type'])
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'type', 'phone', 'username', 'authEmail', 'firstAccessPending', 'inviteId'])
+      ) || (
+        registering(userId) && registrationIdentity(request.resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['username', 'authEmail', 'firstAccessPending', 'inviteId', 'updatedAt'])
+        && request.resource.data.firstAccessPending == false
       );
       allow delete: if isAdmin();
     }
 
     match /account_security/{userId} {
-      allow read: if ownsAccount(userId) || isAdmin();
+      allow read: if isAdmin() || (ownsAccount(userId) && groupMember());
       allow write: if false;
     }
 
     match /password_reset_audit/{resetId} {
+      allow read, write: if false;
+    }
+
+    match /registration_grants/{userId} {
+      allow read, write: if false;
+    }
+
+    match /request_limits/{bucket} {
       allow read, write: if false;
     }
 
@@ -79,32 +144,40 @@ service cloud.firestore {
 
     match /public_profiles/{userId} {
       allow read: if signedIn();
-      allow create, update: if isSelf(userId) || isAdmin();
+      allow create, update: if isSelf(userId) || isAdmin() || registering(userId);
       allow delete: if isAdmin();
     }
 
     match /usernames/{username} {
-      allow read: if true;
-      allow create: if signedIn();
+      allow read: if signedIn() || (request.auth != null && registering(request.auth.uid));
+      allow create: if isAdmin() || (
+        registering(request.auth.uid)
+        && get(/databases/$(database)/documents/registration_grants/$(request.auth.uid)).data.username == username
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.authEmail == get(/databases/$(database)/documents/registration_grants/$(request.auth.uid)).data.authEmail
+        && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.username == username
+      );
       allow delete: if isAdmin();
     }
 
     match /user_stats/{userId} {
       allow read: if signedIn();
-      allow create: if isSelf(userId) || isAdmin();
+      allow create: if isSelf(userId) || isAdmin() || registering(userId);
       allow update: if isSelf(userId) || isAdmin();
       allow delete: if isAdmin();
     }
 
     match /user_inventory/{userId} {
       allow read: if signedIn();
-      allow create, update: if isSelf(userId) || isAdmin();
+      allow create: if isSelf(userId) || isAdmin() || registering(userId);
+      allow update: if isSelf(userId) || isAdmin();
       allow delete: if isAdmin();
     }
 
     match /user_showcase/{userId} {
       allow read: if signedIn();
-      allow create, update: if isSelf(userId) || isAdmin();
+      allow create: if isSelf(userId) || isAdmin() || registering(userId);
+      allow update: if isSelf(userId) || isAdmin();
       allow delete: if isAdmin();
     }
 

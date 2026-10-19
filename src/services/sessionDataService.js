@@ -10,7 +10,11 @@ export function preloadUserSession(uid) {
   if (cachedSession?.uid === uid) return Promise.resolve(cachedSession);
   if (pendingSession?.uid === uid) return pendingSession.promise;
 
+  cachedSession = null;
+  const request = { uid, promise: null };
+  pendingSession = request;
   const promise = getDoc(doc(db, "account_security", uid)).then(async (securitySnap) => {
+    if (pendingSession !== request) return null;
     const security = securitySnap.exists() ? securitySnap.data() : null;
     if (security?.passwordChangeRequired) {
       const userSnap = await getDoc(doc(db, "users", uid));
@@ -33,19 +37,24 @@ export function preloadUserSession(uid) {
       showcase: showcaseSnap.exists() ? showcaseSnap.data() : null,
     };
   }).then((session) => {
+    if (pendingSession !== request) return null;
     cachedSession = session;
     pendingSession = null;
     return cachedSession;
   }).catch((error) => {
-    pendingSession = null;
+    if (pendingSession === request) pendingSession = null;
     throw error;
   });
 
-  pendingSession = { uid, promise };
+  request.promise = promise;
   return promise;
 }
 
 export function clearSessionData() {
   cachedSession = null;
   pendingSession = null;
+}
+
+export function updateCachedSession(uid, changes) {
+  if (cachedSession?.uid === uid) cachedSession = { ...cachedSession, ...changes };
 }

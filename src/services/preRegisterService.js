@@ -11,6 +11,7 @@ import {
 } from "firebase/firestore";
 
 import { db } from "../firebase/firebase";
+import { invalidatePublicProfileCache } from "../utils/publicProfileCache";
 import { buildInitialUserDocuments } from "./userDefaults";
 import { provisionGuestAccount, replacePendingGuestCode } from "./guestAccountService";
 import {
@@ -20,6 +21,18 @@ import {
 } from "./accessCodeService";
 
 const COLLECTION_NAME = "pre_registered_users";
+
+async function resolveSavedGuest(inviteId, uid) {
+  const snapshot = await getDoc(doc(db, COLLECTION_NAME, inviteId));
+  if (!snapshot.exists() || snapshot.data().userId !== uid) return null;
+  const [user, code] = await Promise.all([
+    getDoc(doc(db, "users", uid)), getDoc(doc(db, "invite_access_codes", inviteId)),
+  ]);
+  if (!user.exists()) return null;
+  return { id: inviteId, ...snapshot.data(),
+    temporaryCode: snapshot.data().claimed ? null : code.data()?.code || null,
+    user: { id: uid, ...user.data() } };
+}
 
 export async function getPreRegisters() {
   const q = query(
@@ -114,10 +127,13 @@ export async function createPreRegister({
       error.code = "invite-already-exists";
       throw error;
     }
-    return provisionGuestAccount({
+    const result = await provisionGuestAccount({
       email: guestAuthEmail, code: temporaryCode,
       save: saveInvite,
+      resolveSaved: (uid) => resolveSavedGuest(phoneWithCountry, uid),
     });
+    invalidatePublicProfileCache(result?.userId);
+    return result;
   }
   return saveInvite();
 }
@@ -137,9 +153,11 @@ export async function updatePreRegister(id, { fullName, role, sex }) {
   const existingInvite = await getDoc(doc(db, COLLECTION_NAME, id));
   if (!existingInvite.exists()) throw new Error("Convite não encontrado.");
   if (role === "guest" && !existingInvite.data().claimed && !existingInvite.data().userId) {
-    return provisionExistingGuestInvite(id, existingInvite.data(), sex, cleanName);
+    const result = await provisionExistingGuestInvite(id, existingInvite.data(), sex, cleanName);
+    invalidatePublicProfileCache();
+    return result;
   }
-  return runTransaction(db, async (transaction) => {
+  const result = await runTransaction(db, async (transaction) => {
     const inviteRef = doc(db, COLLECTION_NAME, id);
     const inviteSnap = await transaction.get(inviteRef);
     if (!inviteSnap.exists()) throw new Error("Convite não encontrado.");
@@ -159,6 +177,8 @@ export async function updatePreRegister(id, { fullName, role, sex }) {
       transaction.set(doc(db, "public_profiles", uid), userChanges, { merge: true });
     }
   });
+  invalidatePublicProfileCache(existingInvite.data().userId);
+  return result;
 }
 
 async function provisionExistingGuestInvite(id, invite, sex, fullName) {
@@ -167,7 +187,7 @@ async function provisionExistingGuestInvite(id, invite, sex, fullName) {
   const salt = savedCode.exists() ? invite.accessCodeSalt : generateAccessCodeSalt();
   const hash = savedCode.exists() ? invite.accessCodeHash : await hashAccessCode(code, salt);
   const email = `guest.${generateAccessCodeSalt()}@parads.local`;
-  return provisionGuestAccount({ email, code, save: (uid) => runTransaction(db, async (transaction) => {
+  return provisionGuestAccount({ email, code, resolveSaved: (uid) => resolveSavedGuest(id, uid), save: (uid) => runTransaction(db, async (transaction) => {
     const inviteRef = doc(db, COLLECTION_NAME, id);
     const current = await transaction.get(inviteRef);
     if (!current.exists() || current.data().claimed || current.data().userId) {

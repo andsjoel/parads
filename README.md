@@ -30,6 +30,12 @@ Principais pilares:
 
 ## Como rodar
 
+### Testes isolados de seguranca
+
+O app esta em producao. `npm run dev` usa o Firebase real; nao utilize esse comando para testar dados ficticios.
+
+Use `npm test` para mocks sem rede e `npm run test:emulators` para Auth/Firestore locais no projeto fixo `demo-parads-security` (Node 24.12+ e Java 21+). Nao informe credenciais de producao. Veja [o guia de isolamento](docs/firebase-audit/11-ISOLATED-TESTS.md), [o escopo aprovado](docs/firebase-audit/10-SIMPLIFIED-SECURITY-PLAN.md) e [a contingencia](docs/firebase-audit/12-CONTINGENCY-RUNBOOK.md).
+
 Instale as dependencias:
 
 ```bash

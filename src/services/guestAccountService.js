@@ -1,6 +1,6 @@
 import { deleteApp, getApp, initializeApp } from "firebase/app";
 import {
-  createUserWithEmailAndPassword, deleteUser, initializeAuth,
+  createUserWithEmailAndPassword, initializeAuth,
   inMemoryPersistence, signInWithEmailAndPassword, signOut, updatePassword,
 } from "firebase/auth";
 import { generateAccessCodeSalt, pendingGuestPassword } from "./accessCodeService";
@@ -17,13 +17,15 @@ async function withIsolatedAuth(operation) {
 }
 
 // A separate Auth instance keeps the administrator's session intact.
-export function provisionGuestAccount({ email, code, save }) {
+export function provisionGuestAccount({ email, code, save, resolveSaved }) {
   return withIsolatedAuth(async (isolatedAuth) => {
     const credential = await createUserWithEmailAndPassword(isolatedAuth, email, pendingGuestPassword(code));
     try {
       return await save(credential.user.uid);
     } catch (error) {
-      await deleteUser(credential.user).catch(() => {});
+      // A failed response may follow a committed invitation. Never delete its UID.
+      const saved = await Promise.resolve().then(() => resolveSaved?.(credential.user.uid)).catch(() => null);
+      if (saved) return saved;
       throw error;
     }
   });

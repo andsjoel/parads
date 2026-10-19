@@ -36,6 +36,18 @@ test("maintenance is enabled for this release", () => {
   assert.equal(MAINTENANCE_ENABLED, true);
 });
 
+test("only the local development environment bypasses maintenance", async () => {
+  const config = await readFile(new URL("../src/config/appStatus.js", import.meta.url), "utf8");
+  for (const dev of [true, false, undefined]) {
+    const entry = new SourceTextModule(config, {
+      initializeImportMeta(meta) { meta.env = { DEV: dev }; },
+    });
+    await entry.link(() => { throw new Error("Unexpected config dependency"); });
+    await entry.evaluate();
+    assert.equal(entry.namespace.MAINTENANCE_ENABLED, dev !== true);
+  }
+});
+
 test("maintenance overrides every route and desktop blocking without mounting authentication", async () => {
   for (const pathname of ["/", "/login", "/list", "/matches", "/profile", "/admin/volley-list", "/admin/matches", "/unknown"]) {
     for (const mobile of [true, false]) {
