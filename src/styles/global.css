@@ -1,5 +1,32 @@
 @import "tailwindcss";
 
+.maintenance-screen {
+  min-height: 100vh;
+  min-height: 100svh;
+  background-color: #180204;
+  background-size: contain;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.desktop-blocked {
+  display: grid;
+  min-height: 100vh;
+  min-height: 100svh;
+  place-items: center;
+  padding: 40px 24px;
+  background-color: #180204;
+  background-size: cover;
+  background-position: center;
+}
+
+.desktop-blocked-content {
+  width: 100%;
+  max-width: 440px;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
 @font-face {
   font-family: "KG Blank Space Sketch";
   src: url("../assets/fonts/KGBlankSpaceSketch.ttf") format("truetype");
