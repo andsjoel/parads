@@ -86,6 +86,43 @@ test("new pics have matching rarity, price and unique IDs", () => {
   }
 });
 
+test("October additions keep filename rarities, thematic grouping and current prices", () => {
+  const expectedPics = [
+    ["pic-bokuto-1", "haikyu", "epic"], ["pic-bokuto-2", "haikyu", "epic"], ["pic-bokuto-3", "haikyu", "rare"],
+    ["pic-kageyama-1", "haikyu", "rare"], ["pic-kageyama-2", "haikyu", "epic"], ["pic-kageyama-3", "haikyu", "legendary"],
+    ["pic-ariel-1", "disney", "epic"], ["pic-ariel-2", "disney", "rare"], ["pic-moana-1", "disney", "epic"],
+    ["pic-rapunzel-1", "disney", "rare"], ["pic-rapunzel-2", "disney", "epic"], ["pic-rapunzel-3", "disney", "epic"], ["pic-ursula-1", "disney", "epic"],
+    ["pic-pokemon-1", "pokemon", "rare"], ["pic-pokemon-2", "pokemon", "rare"], ["pic-pokemon-3", "pokemon", "legendary"],
+  ];
+  const expectedBackgrounds = [["bg-haikyu-4", "haikyu", "legendary"], ["bg-disney-1", "disney", "rare"],
+    ["bg-disney-2", "disney", "epic"], ["bg-disney-3", "disney", "epic"]];
+  for (const [items, expected] of [[picsModule.namespace.profilePicsCatalog, expectedPics], [catalog, expectedBackgrounds]]) {
+    for (const [id, theme, rarity] of expected) {
+      const item = items.find((entry) => entry.id === id);
+      assert.ok(item, id);
+      assert.equal(item.theme, theme, id);
+      assert.equal(item.rarity, rarity, id);
+      assert.equal(item.imageId, `${id}-${rarity}`);
+      assert.equal(item.price.amount, economy.namespace.ITEM_RARITIES[rarity].price);
+    }
+  }
+});
+
+test("all pics are catalogued and new animations have static thumbnails, including the corrected Gengar GIF", async () => {
+  const entries = await readdir(new URL("src/assets/profile-pics/", root), { recursive: true });
+  const originals = entries.filter((entry) => /\.(png|jpe?g|webp|gif)$/i.test(entry) && !/-thumb\./.test(entry));
+  const pics = picsModule.namespace.profilePicsCatalog;
+  const imageStems = pics.map((item) => path.parse(item.imageId).name);
+  assert.equal(new Set(imageStems).size, imageStems.length);
+  for (const file of originals) {
+    const stem = path.parse(file).name;
+    if (stem !== "pic-default") assert.ok(imageStems.includes(stem), file);
+    if (/\.gif$/i.test(file)) assert.ok(entries.includes(file.replace(/\.gif$/i, "-thumb.webp")), file);
+  }
+  const gengar = await readFile(new URL("src/assets/profile-pics/pokemon/pic-pokemon-2-rare.gif", root));
+  assert.match(gengar.subarray(0, 6).toString("ascii"), /^GIF8[79]a$/);
+});
+
 test("equipped catalog IDs resolve named assets and GIF thumbnails, including both Hinata versions", async () => {
   const picEntries = await readdir(new URL("src/assets/profile-pics/", root), { recursive: true });
   const picFiles = picEntries.filter((entry) => /\.(png|jpe?g|webp|gif)$/i.test(entry));

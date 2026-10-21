@@ -21,6 +21,7 @@ export const profileBackgroundsCatalog = [
   background("bg-haikyu-1", "Time", "haikyu", "uncommon"),
   background("bg-haikyu-2", "Reis", "haikyu", "uncommon"),
   background("bg-haikyu-3", "Corvos", "haikyu", "uncommon"),
+  background("bg-haikyu-4", "Karasuno", "haikyu", "legendary", "bg-haikyu-4-legendary"),
   background("bg-pokemon-1", "Pokebola", "pokemon", "uncommon"),
   background("bg-pokemon-2", "Pika", "pokemon", "uncommon"),
   background("bg-pokemon-3", "Forest", "pokemon", "uncommon"),
@@ -39,6 +40,9 @@ export const profileBackgroundsCatalog = [
   background("bg-rick-morty-2", "Rick e Morty", "rick-morty", "epic", "bg-rick-morty-2-epic"),
   background("bg-sailor-1", "Sailor Moon", "sailor-moon", "legendary", "bg-sailor-1-epic"),
   background("bg-sailor-2", "Sailor Moon", "sailor-moon", "epic", "bg-sailor-2-epic"),
+  background("bg-disney-1", "Magia Disney", "disney", "rare", "bg-disney-1-rare"),
+  background("bg-disney-2", "Bambi", "disney", "epic", "bg-disney-2-epic"),
+  background("bg-disney-3", "Dumbo", "disney", "epic", "bg-disney-3-epic"),
 
   background("bg-video-multicato", "Gatoverso", "gatos", "exclusive"),
 ];
